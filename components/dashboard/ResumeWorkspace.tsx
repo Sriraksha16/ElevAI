@@ -7,30 +7,101 @@ export function ResumeWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [error, setError] = useState("");
 
-  const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState("");
 
-    if (!file) {
-      return;
-    }
+ const handleFileChange = (
+  event: React.ChangeEvent<HTMLInputElement>
+) => {
+  const file = event.target.files?.[0];
 
-    setSelectedFile(file);
-  };
+  if (!file) {
+    return;
+  }
+
+  setError("");
+
+  const allowedTypes = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ];
+
+  const maxSize = 5 * 1024 * 1024;
+
+  if (!allowedTypes.includes(file.type)) {
+    setSelectedFile(null);
+    setError("Please upload a PDF, DOC, or DOCX file.");
+    return;
+  }
+
+  if (file.size > maxSize) {
+    setSelectedFile(null);
+    setError("Your resume must be smaller than 5 MB.");
+    return;
+  }
+
+  setSelectedFile(file);
+};
 
   const handleChooseFile = () => {
     fileInputRef.current?.click();
   };
 
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
+ const handleRemoveFile = () => {
+  setSelectedFile(null);
+  setError("");
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  if (fileInputRef.current) {
+    fileInputRef.current.value = "";
+  }
+};
+
+const handleAnalyze = async () => {
+  if (!selectedFile) {
+    return;
+  }
+
+  setIsAnalyzing(true);
+  setError("");
+  setAnalysisMessage("");
+
+  try {
+    const formData = new FormData();
+
+    formData.append("resume", selectedFile);
+
+    const response = await fetch("/api/resume/analyze", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json();
+    
+
+    if (!response.ok) {
+      throw new Error(
+        result.message || "Resume analysis failed."
+      );
     }
-  };
+
+     const characterCount = result.characterCount ?? 0;
+
+      setAnalysisMessage(
+       `Successfully extracted ${characterCount.toLocaleString()} characters from ${result.fileName}.`
+      );
+  } catch (error) {
+    setError(
+      error instanceof Error
+        ? error.message
+        : "Something went wrong."
+    );
+  } finally {
+    setIsAnalyzing(false);
+  }
+};
 
   return (
     <section className="mt-8">
@@ -61,6 +132,11 @@ export function ResumeWorkspace() {
             Upload your resume and let ElevAI analyze your experience,
             skills, ATS compatibility, and career opportunities.
           </p>
+          {error && (
+  <div className="mt-5 rounded-xl border border-red-400/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
+    {error}
+  </div>
+)}
 
           {/* Hidden file input */}
           <input
@@ -128,24 +204,27 @@ export function ResumeWorkspace() {
               </div>
 
               <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  className="aurora-gradient inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:scale-[1.02]"
-                >
-                  <Sparkles size={17} />
-                  Analyze Resume
-                </button>
+                
 
                 <button
                   type="button"
-                  onClick={handleChooseFile}
-                  className="rounded-xl border border-white/10 px-5 py-3 text-sm font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
-                >
-                  Choose Another
+                  onClick={handleAnalyze}
+                  disabled={isAnalyzing}
+                  className="aurora-gradient inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+                     >
+                       <Sparkles size={17} />
+
+                        {isAnalyzing ? "Analyzing..." : "Analyze Resume"}
                 </button>
               </div>
             </div>
           )}
+
+              {analysisMessage && (
+              <div className="mt-5 rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-300">
+                  {analysisMessage}
+             </div>
+           )}
         </div>
       </div>
     </section>
