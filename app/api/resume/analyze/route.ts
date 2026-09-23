@@ -2,6 +2,8 @@ import { getPath } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 
+import { analyzeResume } from "@/lib/ai/resume-analyzer";
+import { calculateResumeScores } from "@/lib/scoring/resume-score";
 
 PDFParse.setWorker(getPath());
 
@@ -25,18 +27,25 @@ export async function POST(request: Request) {
 
     let extractedText = "";
 
-     if (file.type === "application/pdf") {
-           const parser = new PDFParse({
-             data: buffer,
-            });
- 
-            const result = await parser.getText();
+    // -----------------------------------------
+    // PDF
+    // -----------------------------------------
+    if (file.type === "application/pdf") {
+      const parser = new PDFParse({
+        data: buffer,
+      });
 
-             extractedText = result.text;
+      const result = await parser.getText();
 
-               await parser.destroy();
-        }
-     else if (
+      extractedText = result.text;
+
+      await parser.destroy();
+    }
+
+    // -----------------------------------------
+    // DOCX
+    // -----------------------------------------
+    else if (
       file.type ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
@@ -45,7 +54,12 @@ export async function POST(request: Request) {
       });
 
       extractedText = result.value;
-    } else {
+    }
+
+    // -----------------------------------------
+    // Unsupported file
+    // -----------------------------------------
+    else {
       return Response.json(
         {
           success: false,
@@ -55,6 +69,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // -----------------------------------------
+    // Make sure text was extracted
+    // -----------------------------------------
     if (!extractedText.trim()) {
       return Response.json(
         {
@@ -66,28 +83,41 @@ export async function POST(request: Request) {
       );
     }
 
+    // -----------------------------------------
+    // REAL AI ANALYSIS
+    // -----------------------------------------
+    const analysis = await analyzeResume(extractedText);
+
+    // -----------------------------------------
+    // ELEVAI SCORING ENGINE
+    // -----------------------------------------
+    const scores = calculateResumeScores(analysis);
+
+    // -----------------------------------------
+    // RESPONSE
+    // -----------------------------------------
     return Response.json({
       success: true,
-      message: "Resume text extracted successfully.",
+      message: "Resume analyzed successfully.",
       fileName: file.name,
-      fileType: file.type,
       characterCount: extractedText.length,
-      text: extractedText,
-    });
-  } 
-  
-   catch (error) {
-  console.error("Resume extraction error:", error);
 
-  return Response.json(
-    {
-      success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Something went wrong while processing the resume.",
-    },
-    { status: 500 }
-  );
-}
+      analysis,
+
+      scores,
+    });
+  } catch (error) {
+    console.error("Resume analysis error:", error);
+
+    return Response.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong while processing the resume.",
+      },
+      { status: 500 }
+    );
+  }
 }
