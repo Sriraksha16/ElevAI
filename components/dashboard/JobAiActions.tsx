@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BrainCircuit,
   FileText,
@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { downloadInterviewPreparationPDF } from "@/lib/pdf/interview-preparation-pdf";
+
 
 type JobAiActionsProps = {
   company: string;
@@ -122,8 +123,30 @@ export function JobAiActions({
     useState<InterviewCoachResult | null>(null);
 
   const [tone, setTone] = useState<
-    "professional" | "confident" | "friendly"
-  >("professional");
+  "professional" | "confident" | "friendly"
+>("professional");
+
+useEffect(() => {
+  try {
+    const stored = localStorage.getItem("elevai-settings");
+
+    if (!stored) {
+      return;
+    }
+
+    const parsed = JSON.parse(stored);
+
+    if (
+      parsed.preferredTone === "professional" ||
+      parsed.preferredTone === "confident" ||
+      parsed.preferredTone === "friendly"
+    ) {
+      setTone(parsed.preferredTone);
+    }
+  } catch {
+    // Keep professional as the default tone.
+  }
+}, []);
 
   function openAction(
     action: "match" | "cover-letter" | "interview"

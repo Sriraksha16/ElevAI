@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
@@ -9,9 +10,90 @@ import { ResumeWorkspace } from "@/components/dashboard/ResumeWorkspace";
 import type { ResumeAnalysis } from "@/lib/ai/resume-analyzer";
 import type { ResumeScores } from "@/lib/scoring/resume-score";
 
+const SETTINGS_STORAGE_KEY = "elevai-settings";
+
+const DEFAULT_PROFILE = {
+  name: "Sriraksha",
+  careerTitle: "Career Explorer",
+};
+
+type ProfileSettings = {
+  name: string;
+  careerTitle: string;
+};
+
 export default function DashboardPage() {
-  const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null);
-  const [scores, setScores] = useState<ResumeScores | null>(null);
+  const [profileSettings, setProfileSettings] =
+    useState<ProfileSettings>(DEFAULT_PROFILE);
+
+  const [analysis, setAnalysis] =
+    useState<ResumeAnalysis | null>(null);
+
+  const [scores, setScores] =
+    useState<ResumeScores | null>(null);
+
+  // ----------------------------------------
+  // Load saved profile settings
+  // ----------------------------------------
+
+  useEffect(() => {
+    const loadProfileSettings = () => {
+      try {
+        const stored = localStorage.getItem(
+          SETTINGS_STORAGE_KEY
+        );
+
+        if (!stored) {
+          setProfileSettings(DEFAULT_PROFILE);
+          return;
+        }
+
+        const parsed = JSON.parse(stored);
+
+        setProfileSettings({
+          name:
+            typeof parsed.name === "string" &&
+            parsed.name.trim()
+              ? parsed.name.trim()
+              : DEFAULT_PROFILE.name,
+
+          careerTitle:
+            typeof parsed.careerTitle === "string" &&
+            parsed.careerTitle.trim()
+              ? parsed.careerTitle.trim()
+              : DEFAULT_PROFILE.careerTitle,
+        });
+      } catch {
+        setProfileSettings(DEFAULT_PROFILE);
+      }
+    };
+
+    // Load when dashboard opens
+    loadProfileSettings();
+
+    // Update when another tab/window changes localStorage
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === SETTINGS_STORAGE_KEY) {
+        loadProfileSettings();
+      }
+    };
+
+    window.addEventListener(
+      "storage",
+      handleStorageChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "storage",
+        handleStorageChange
+      );
+    };
+  }, []);
+
+  // ----------------------------------------
+  // Resume analysis handlers
+  // ----------------------------------------
 
   const handleAnalysisComplete = (
     nextAnalysis: ResumeAnalysis,
@@ -36,8 +118,8 @@ export default function DashboardPage() {
         <div className="flex-1">
           {/* Top bar */}
           <DashboardHeader
-            name="Sriraksha"
-            role="Career Explorer"
+            name={profileSettings.name}
+            role={profileSettings.careerTitle}
           />
 
           {/* Dashboard */}
@@ -53,8 +135,8 @@ export default function DashboardPage() {
               </h2>
 
               <p className="mt-2 max-w-2xl text-slate-400">
-                Track your resume strength, application readiness, and AI
-                recommendations from one workspace.
+                Track your resume strength, application readiness,
+                and AI recommendations from one workspace.
               </p>
             </div>
 
@@ -139,7 +221,8 @@ export default function DashboardPage() {
                       </p>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {analysis.candidateProfile.targetRoles.length > 0 ? (
+                        {analysis.candidateProfile.targetRoles.length >
+                        0 ? (
                           analysis.candidateProfile.targetRoles.map(
                             (role) => (
                               <span
@@ -289,7 +372,8 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 grid gap-3 md:grid-cols-2">
-                    {analysis.career.suggestedImprovements.length > 0 ? (
+                    {analysis.career.suggestedImprovements.length >
+                    0 ? (
                       analysis.career.suggestedImprovements.map(
                         (improvement) => (
                           <div
@@ -408,3 +492,4 @@ export default function DashboardPage() {
     </main>
   );
 }
+
