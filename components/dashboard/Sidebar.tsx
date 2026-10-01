@@ -25,6 +25,10 @@ const navigation = [
     label: "Job Tracker",
     href: "/dashboard/jobs",
   },
+  {
+    label: "Discover Jobs",
+    href: "/dashboard/jobs/discover",
+  },
 ];
 
 export function Sidebar() {

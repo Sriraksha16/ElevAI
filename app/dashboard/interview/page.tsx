@@ -65,11 +65,9 @@ type ApiResponse = {
 };
 
 export default function InterviewPage() {
-  const [resume, setResume] =
-    useState<File | null>(null);
+  const [resume, setResume] = useState<File | null>(null);
 
-  const [jobDescription, setJobDescription] =
-    useState("");
+  const [jobDescription, setJobDescription] = useState("");
 
   const [result, setResult] =
     useState<InterviewCoachResult | null>(null);
@@ -99,6 +97,16 @@ export default function InterviewPage() {
       setError(
         "Please upload a PDF or DOCX resume."
       );
+
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size === 0) {
+      setError(
+        "The uploaded resume is empty."
+      );
+
       event.target.value = "";
       return;
     }
@@ -107,6 +115,7 @@ export default function InterviewPage() {
       setError(
         "Resume must be smaller than 5 MB."
       );
+
       event.target.value = "";
       return;
     }
@@ -266,7 +275,7 @@ export default function InterviewPage() {
                 <label className="mx-auto mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center transition hover:border-indigo-400/40 hover:bg-white/[0.04]">
                   <input
                     type="file"
-                    accept=".pdf,.docx"
+                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={handleResumeChange}
                     className="hidden"
                   />
@@ -388,6 +397,18 @@ export default function InterviewPage() {
                   {result.interviewProfile.company}
                 </p>
               )}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {result.interviewProfile
+                  .experienceLevel && (
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-400">
+                    {
+                      result.interviewProfile
+                        .experienceLevel
+                    }
+                  </span>
+                )}
+              </div>
 
               <p className="mt-5 max-w-3xl text-sm leading-6 text-slate-400">
                 {
@@ -578,7 +599,7 @@ export default function InterviewPage() {
 
             {/* Actions */}
 
-            <div className="flex justify-center">
+            <div className="flex justify-center gap-3">
               <button
                 type="button"
                 onClick={handleReset}
@@ -608,16 +629,22 @@ function SummaryCard({
         {title}
       </h3>
 
-      <ul className="mt-4 space-y-3">
-        {items.map((item, index) => (
-          <li
-            key={index}
-            className="text-sm leading-6 text-slate-400"
-          >
-            • {item}
-          </li>
-        ))}
-      </ul>
+      {items.length > 0 ? (
+        <ul className="mt-4 space-y-3">
+          {items.map((item, index) => (
+            <li
+              key={index}
+              className="text-sm leading-6 text-slate-400"
+            >
+              • {item}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-4 text-sm text-slate-500">
+          No items identified.
+        </p>
+      )}
     </section>
   );
 }
@@ -690,16 +717,22 @@ function QuestionCard({
           What to prepare
         </p>
 
-        <ul className="mt-2 space-y-2">
-          {items.map((item, index) => (
-            <li
-              key={index}
-              className="text-sm leading-6 text-slate-400"
-            >
-              • {item}
-            </li>
-          ))}
-        </ul>
+        {items.length > 0 ? (
+          <ul className="mt-2 space-y-2">
+            {items.map((item, index) => (
+              <li
+                key={index}
+                className="text-sm leading-6 text-slate-400"
+              >
+                • {item}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">
+            No specific preparation points provided.
+          </p>
+        )}
       </div>
     </details>
   );

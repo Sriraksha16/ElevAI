@@ -296,6 +296,12 @@ export async function POST(request: Request) {
       );
     }
 
+
+    console.log("========== COVER LETTER RESUME TEXT ==========");
+    console.log(resumeText.slice(0, 5000));
+    console.log("========== RESUME TEXT LENGTH ==========");
+    console.log(resumeText.length);
+
     // ----------------------------------------
     // Detect security/verification pages
     // ----------------------------------------

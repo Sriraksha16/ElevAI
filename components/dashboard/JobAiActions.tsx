@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   BrainCircuit,
   FileText,
@@ -124,14 +124,16 @@ export function JobAiActions({
 
   const [tone, setTone] = useState<
   "professional" | "confident" | "friendly"
->("professional");
+>(() => {
+  if (typeof window === "undefined") {
+    return "professional";
+  }
 
-useEffect(() => {
   try {
     const stored = localStorage.getItem("elevai-settings");
 
     if (!stored) {
-      return;
+      return "professional";
     }
 
     const parsed = JSON.parse(stored);
@@ -141,12 +143,14 @@ useEffect(() => {
       parsed.preferredTone === "confident" ||
       parsed.preferredTone === "friendly"
     ) {
-      setTone(parsed.preferredTone);
+      return parsed.preferredTone;
     }
   } catch {
     // Keep professional as the default tone.
   }
-}, []);
+
+  return "professional";
+});
 
   function openAction(
     action: "match" | "cover-letter" | "interview"

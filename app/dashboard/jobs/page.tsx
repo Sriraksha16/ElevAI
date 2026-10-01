@@ -1,6 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   BriefcaseBusiness,
   CalendarDays,
@@ -234,18 +239,58 @@ export default function JobsPage() {
   >(null);
 
   useEffect(() => {
-    try {
-      const storedJobs = localStorage.getItem(STORAGE_KEY);
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const storedJobs = localStorage.getItem(STORAGE_KEY);
 
-      if (storedJobs) {
-        const parsedJobs = JSON.parse(storedJobs);
-        setJobs(normalizeStoredJobs(parsedJobs));
+        if (storedJobs) {
+          const parsedJobs = JSON.parse(storedJobs);
+          setJobs(normalizeStoredJobs(parsedJobs));
+        }
+      } catch (error) {
+        console.error("Could not load job tracker data:", error);
+      } finally {
+        setIsLoaded(true);
       }
-    } catch (error) {
-      console.error("Could not load job tracker data:", error);
-    } finally {
-      setIsLoaded(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasJobDetails = ["jobTitle", "company", "jobUrl"].some(
+      (key) => params.has(key)
+    );
+
+    if (!hasJobDetails) {
+      return;
     }
+
+    const position = params.get("jobTitle") || "";
+    const company = params.get("company") || "";
+    const jobUrl = params.get("jobUrl") || "";
+    params.delete("jobTitle");
+    params.delete("company");
+    params.delete("jobUrl");
+
+    const remainingQuery = params.toString();
+    const nextUrl =
+      `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ""}${window.location.hash}`;
+
+    const timeoutId = window.setTimeout(() => {
+      setForm({
+        ...emptyForm,
+        position,
+        company,
+        jobUrl,
+        applicationDate: getToday(),
+      });
+      setIsModalOpen(true);
+      window.history.replaceState(null, "", nextUrl);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {

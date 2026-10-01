@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Bell,
   Check,
@@ -33,30 +33,36 @@ const DEFAULT_SETTINGS: Settings = {
 
 const STORAGE_KEY = "elevai-settings";
 
-export default function SettingsPage() {
-  const [settings, setSettings] =
-    useState<Settings>(DEFAULT_SETTINGS);
+function loadSettings(): Settings {
+  if (typeof window === "undefined") {
+    return DEFAULT_SETTINGS;
+  }
 
-  const [saved, setSaved] = useState(false);
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(
-        STORAGE_KEY
-      );
-
-      if (stored) {
-        const parsed = JSON.parse(stored);
-
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-        });
-      }
-    } catch {
-      // Keep default settings if stored data is invalid.
+    if (!stored) {
+      return DEFAULT_SETTINGS;
     }
-  }, []);
+
+    const parsed = JSON.parse(stored);
+
+    if (!parsed || typeof parsed !== "object") {
+      return DEFAULT_SETTINGS;
+    }
+
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [saved, setSaved] = useState(false);
 
   function updateSetting<K extends keyof Settings>(
     key: K,
@@ -85,9 +91,7 @@ export default function SettingsPage() {
 
   function handleReset() {
     setSettings(DEFAULT_SETTINGS);
-
     localStorage.removeItem(STORAGE_KEY);
-
     setSaved(false);
   }
 
@@ -95,8 +99,6 @@ export default function SettingsPage() {
     <main className="min-h-screen bg-[#070b14] text-white">
       <div className="mx-auto max-w-5xl px-6 py-8 lg:px-8">
         <PageBackLink />
-
-        {/* Header */}
 
         <div className="mt-8">
           <div className="flex items-start gap-4">
@@ -122,8 +124,6 @@ export default function SettingsPage() {
         </div>
 
         <div className="mt-8 space-y-6">
-          {/* Profile */}
-
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
               icon={<User className="h-5 w-5" />}
@@ -164,13 +164,9 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* AI Preferences */}
-
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
-              icon={
-                <SettingsIcon className="h-5 w-5" />
-              }
+              icon={<SettingsIcon className="h-5 w-5" />}
               title="AI Preferences"
               description="Choose how ElevAI should tailor generated career content."
             />
@@ -185,8 +181,7 @@ export default function SettingsPage() {
                   onChange={(event) =>
                     updateSetting(
                       "preferredTone",
-                      event.target
-                        .value as Settings["preferredTone"]
+                      event.target.value as Settings["preferredTone"]
                     )
                   }
                   className="settings-input"
@@ -207,8 +202,6 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Resume Preferences */}
-
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
               icon={<FileText className="h-5 w-5" />}
@@ -217,14 +210,11 @@ export default function SettingsPage() {
             />
 
             <div className="mt-6">
-              <Field
-                label="Preferred Resume Format"
-              >
+              <Field label="Preferred Resume Format">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <ChoiceButton
                     selected={
-                      settings.resumeFormat ===
-                      "pdf"
+                      settings.resumeFormat === "pdf"
                     }
                     onClick={() =>
                       updateSetting(
@@ -238,8 +228,7 @@ export default function SettingsPage() {
 
                   <ChoiceButton
                     selected={
-                      settings.resumeFormat ===
-                      "docx"
+                      settings.resumeFormat === "docx"
                     }
                     onClick={() =>
                       updateSetting(
@@ -255,8 +244,6 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Notifications */}
-
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
               icon={<Bell className="h-5 w-5" />}
@@ -268,9 +255,7 @@ export default function SettingsPage() {
               <Toggle
                 label="Email Notifications"
                 description="Receive important ElevAI account and feature notifications."
-                enabled={
-                  settings.emailNotifications
-                }
+                enabled={settings.emailNotifications}
                 onChange={(value) =>
                   updateSetting(
                     "emailNotifications",
@@ -282,9 +267,7 @@ export default function SettingsPage() {
               <Toggle
                 label="Application Reminders"
                 description="Allow ElevAI to use your preference for future job application reminders."
-                enabled={
-                  settings.applicationReminders
-                }
+                enabled={settings.applicationReminders}
                 onChange={(value) =>
                   updateSetting(
                     "applicationReminders",
@@ -294,8 +277,6 @@ export default function SettingsPage() {
               />
             </div>
           </section>
-
-          {/* Actions */}
 
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -344,10 +325,6 @@ export default function SettingsPage() {
   );
 }
 
-/* ----------------------------------------
-   Section Header
------------------------------------------ */
-
 function SectionHeader({
   icon,
   title,
@@ -376,10 +353,6 @@ function SectionHeader({
   );
 }
 
-/* ----------------------------------------
-   Field
------------------------------------------ */
-
 function Field({
   label,
   description,
@@ -407,10 +380,6 @@ function Field({
     </div>
   );
 }
-
-/* ----------------------------------------
-   Choice Button
------------------------------------------ */
 
 function ChoiceButton({
   selected,
@@ -456,10 +425,6 @@ function ChoiceButton({
   );
 }
 
-/* ----------------------------------------
-   Toggle
------------------------------------------ */
-
 function Toggle({
   label,
   description,
@@ -496,9 +461,7 @@ function Toggle({
       >
         <span
           className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
-            enabled
-              ? "left-6"
-              : "left-1"
+            enabled ? "left-6" : "left-1"
           }`}
         />
       </div>
