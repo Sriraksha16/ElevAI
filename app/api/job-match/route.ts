@@ -7,6 +7,10 @@ export async function POST(request: Request) {
     const resume = formData.get("resume");
     const jobDescription = formData.get("jobDescription");
 
+    // -----------------------------------------
+    // Validate resume
+    // -----------------------------------------
+
     if (!(resume instanceof File)) {
       return Response.json(
         {
@@ -16,6 +20,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // -----------------------------------------
+    // Validate job description
+    // -----------------------------------------
 
     if (typeof jobDescription !== "string") {
       return Response.json(
@@ -37,6 +45,34 @@ export async function POST(request: Request) {
       );
     }
 
+    // -----------------------------------------
+    // Validate file size
+    // -----------------------------------------
+
+    if (resume.size === 0) {
+      return Response.json(
+        {
+          success: false,
+          message: "The uploaded resume is empty.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (resume.size > 5 * 1024 * 1024) {
+      return Response.json(
+        {
+          success: false,
+          message: "Resume must be smaller than 5 MB.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // -----------------------------------------
+    // Read file
+    // -----------------------------------------
+
     const buffer = Buffer.from(
       await resume.arrayBuffer()
     );
@@ -46,6 +82,7 @@ export async function POST(request: Request) {
     // -----------------------------------------
     // PDF
     // -----------------------------------------
+
     if (resume.type === "application/pdf") {
       const { PDFParse } = await import("pdf-parse");
       const { getPath } = await import("pdf-parse/worker");
@@ -66,6 +103,7 @@ export async function POST(request: Request) {
     // -----------------------------------------
     // DOCX
     // -----------------------------------------
+
     else if (
       resume.type ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -83,6 +121,7 @@ export async function POST(request: Request) {
     // -----------------------------------------
     // Unsupported file
     // -----------------------------------------
+
     else {
       return Response.json(
         {
@@ -95,8 +134,9 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------
-    // Validate extracted resume
+    // Validate extracted text
     // -----------------------------------------
+
     if (!resumeText.trim()) {
       return Response.json(
         {
@@ -111,6 +151,7 @@ export async function POST(request: Request) {
     // -----------------------------------------
     // AI JOB MATCHING
     // -----------------------------------------
+
     const match = await matchResumeToJob(
       resumeText,
       jobDescription
@@ -119,14 +160,19 @@ export async function POST(request: Request) {
     // -----------------------------------------
     // RESPONSE
     // -----------------------------------------
+
     return Response.json({
       success: true,
-      message: "Job match analysis completed successfully.",
+      message:
+        "Job match analysis completed successfully.",
       fileName: resume.name,
       match,
     });
   } catch (error) {
-    console.error("Job match analysis error:", error);
+    console.error(
+      "Job match analysis error:",
+      error
+    );
 
     return Response.json(
       {

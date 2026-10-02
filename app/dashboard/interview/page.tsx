@@ -67,7 +67,8 @@ type ApiResponse = {
 export default function InterviewPage() {
   const [resume, setResume] = useState<File | null>(null);
 
-  const [jobDescription, setJobDescription] = useState("");
+  const [jobDescription, setJobDescription] =
+    useState("");
 
   const [result, setResult] =
     useState<InterviewCoachResult | null>(null);

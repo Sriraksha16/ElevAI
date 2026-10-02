@@ -1,3 +1,4 @@
+
 const steps = [
   {
     number: "01",
@@ -29,7 +30,7 @@ export function HowItWorks() {
   return (
     <section
       id="how-it-works"
-      className="relative px-6 py-24 lg:px-8"
+      className="scroll-mt-24 relative px-6 py-24 lg:px-8"
     >
       <div className="mx-auto max-w-7xl">
         {/* Section heading */}
@@ -43,8 +44,8 @@ export function HowItWorks() {
           </h2>
 
           <p className="mt-4 text-slate-400">
-            Four simple steps to turn your job application into a smarter
-            career strategy.
+            Four simple steps to turn your job
+            application into a smarter career strategy.
           </p>
         </div>
 
@@ -82,3 +83,4 @@ export function HowItWorks() {
     </section>
   );
 }
+

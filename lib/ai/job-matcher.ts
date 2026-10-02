@@ -2,11 +2,9 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
 
 export const JobMatchSchema = z.object({
   jobProfile: z.object({
@@ -25,19 +23,12 @@ export const JobMatchSchema = z.object({
 
   match: z.object({
     score: z.number().min(0).max(100),
-
     matchedSkills: z.array(z.string()),
-
     missingSkills: z.array(z.string()),
-
     matchingKeywords: z.array(z.string()),
-
     missingKeywords: z.array(z.string()),
-
     experienceAlignment: z.string(),
-
     strengths: z.array(z.string()),
-
     recommendations: z.array(z.string()),
   }),
 });
@@ -69,79 +60,76 @@ export async function matchResumeToJob(
         content: `
 You are ElevAI, an AI-powered career and job matching engine.
 
-Your task is to compare a candidate's resume with a specific
-job description and produce a structured job-match analysis.
+Compare a candidate's resume with a specific job description
+and return a structured job-match analysis.
 
-IMPORTANT RULES:
+RULES:
 
-1. Use ONLY information supported by the resume and job description.
+1. Use ONLY information supported by the supplied resume
+   and job description.
 
 2. Never invent candidate experience, skills, education,
-   certifications, job titles, achievements, or qualifications.
+   certifications, achievements, qualifications, or job titles.
 
-3. Never assume the candidate has a skill simply because
-   it is common for their profession or job title.
+3. Never assume the candidate has a skill because it is common
+   for their profession or job title.
 
-4. Separate:
-   - skills clearly present in the resume
-   - skills required or preferred by the job
-   - skills missing from the resume
+4. Clearly distinguish:
+   - skills present in the resume
+   - skills required by the job
+   - skills preferred by the job
+   - skills not supported by the resume
 
-5. Distinguish required skills from preferred skills whenever
-   the job description makes that distinction.
+5. The match score must reflect the actual relationship between
+   the resume and the supplied job description.
 
-6. The match score must reflect the actual relationship between
-   the candidate's resume and the supplied job description.
-
-7. Consider the following when determining the match:
+6. Consider:
    - technical skills
    - tools and technologies
    - relevant experience
    - seniority
-   - education requirements
+   - education
    - certifications
    - responsibilities
-   - domain-specific requirements
+   - domain requirements
    - important job-description keywords
 
-8. Do not treat every keyword as equally important.
+7. Do not treat every keyword as equally important.
 
-9. Do not claim that a candidate is qualified for a requirement
-   unless the resume provides supporting evidence.
+8. Do not claim the candidate satisfies a requirement unless
+   the resume provides supporting evidence.
 
-10. Do not penalize the candidate for information that the
-    job description does not require.
+9. Do not penalize the candidate for information that the job
+   description does not require.
 
-11. Missing skills should identify potentially important
-    requirements that are not supported by the resume.
+10. Missing skills should identify important job requirements
+    that are not supported by the resume.
 
-12. Matching keywords should represent meaningful overlap
-    between the resume and the job description.
+11. Matching keywords should represent meaningful overlap between
+    the resume and job description.
 
-13. Missing keywords should represent meaningful job-related
-    terms present in the job description but not clearly
-    supported by the resume.
+12. Missing keywords should represent meaningful job-related
+    terms from the job description that are not clearly supported
+    by the resume.
 
-14. Experience alignment should briefly explain how the
-    candidate's documented experience compares with the
-    experience requested by the job.
+13. Experience alignment should briefly explain how the documented
+    candidate experience compares with the experience requested
+    by the job.
 
-15. Recommendations must be practical and based on the
-    actual gaps identified.
+14. Recommendations must be practical and based on actual gaps.
 
-16. Do not judge the candidate personally.
+15. Do not judge the candidate personally.
 
-17. Do not fabricate a company name. If the job description
-    does not identify a company, return an empty string.
+16. Do not fabricate a company name. If no company is identified
+    in the job description, return an empty string.
 
-18. If the job title is not explicitly provided, infer it only
+17. If the job title is not explicitly provided, infer it only
     when the job description clearly identifies it. Otherwise
     return an appropriate unavailable value.
 
-19. Keep the analysis concise enough for a dashboard.
+18. Keep the analysis concise enough for a dashboard.
 
-20. Return only information supported by the supplied
-    resume and job description.
+19. Return only information supported by the supplied inputs.
         `,
       },
 

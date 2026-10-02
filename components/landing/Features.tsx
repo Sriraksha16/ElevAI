@@ -1,3 +1,4 @@
+
 import {
   FileText,
   Target,
@@ -27,7 +28,10 @@ const features = [
 
 export function Features() {
   return (
-    <section id="features" className="px-6 py-24 lg:px-8">
+    <section
+      id="features"
+      className="scroll-mt-24 px-6 py-24 lg:px-8"
+    >
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-medium uppercase tracking-[0.25em] text-indigo-400">
@@ -39,8 +43,9 @@ export function Features() {
           </h2>
 
           <p className="mt-4 text-slate-400">
-            ElevAI brings your resume, job matching, and career preparation
-            into one intelligent workspace.
+            ElevAI brings your resume, job matching, and
+            career preparation into one intelligent
+            workspace.
           </p>
         </div>
 
@@ -72,3 +77,4 @@ export function Features() {
     </section>
   );
 }
+

@@ -18,12 +18,60 @@ import { ResumeWorkspace } from "@/components/dashboard/ResumeWorkspace";
 import type { ResumeAnalysis } from "@/lib/ai/resume-analyzer";
 import type { ResumeScores } from "@/lib/scoring/resume-score";
 
+const RESUME_STORAGE_KEY = "elevai-analyzed-resume";
+
+type StoredResume = {
+  analysis: ResumeAnalysis;
+  scores: ResumeScores;
+  fileName?: string;
+  characterCount?: number;
+  analyzedAt: string;
+};
+
+function getStoredResume(): StoredResume | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const stored = localStorage.getItem(RESUME_STORAGE_KEY);
+
+    if (!stored) {
+      return null;
+    }
+
+    const parsed = JSON.parse(stored) as Partial<StoredResume>;
+
+    if (!parsed.analysis || !parsed.scores) {
+      return null;
+    }
+
+    return parsed as StoredResume;
+  } catch {
+    try {
+      localStorage.removeItem(RESUME_STORAGE_KEY);
+    } catch {
+      // Ignore localStorage errors.
+    }
+
+    return null;
+  }
+}
+
 export default function ResumePage() {
+  const [storedResume] = useState<StoredResume | null>(
+    getStoredResume
+  );
+
   const [analysis, setAnalysis] =
-    useState<ResumeAnalysis | null>(null);
+    useState<ResumeAnalysis | null>(
+      () => storedResume?.analysis ?? null
+    );
 
   const [scores, setScores] =
-    useState<ResumeScores | null>(null);
+    useState<ResumeScores | null>(
+      () => storedResume?.scores ?? null
+    );
 
   function handleAnalysisComplete(
     nextAnalysis: ResumeAnalysis,
@@ -31,11 +79,35 @@ export default function ResumePage() {
   ) {
     setAnalysis(nextAnalysis);
     setScores(nextScores);
+
+    try {
+      const storedResume: StoredResume = {
+        analysis: nextAnalysis,
+        scores: nextScores,
+        analyzedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(
+        RESUME_STORAGE_KEY,
+        JSON.stringify(storedResume)
+      );
+    } catch (error) {
+      console.error(
+        "Failed to save analyzed resume:",
+        error
+      );
+    }
   }
 
   function handleAnalysisReset() {
     setAnalysis(null);
     setScores(null);
+
+    try {
+      localStorage.removeItem(RESUME_STORAGE_KEY);
+    } catch {
+      // Ignore localStorage errors.
+    }
   }
 
   return (
@@ -73,12 +145,8 @@ export default function ResumePage() {
 
         <div className="mt-8">
           <ResumeWorkspace
-            onAnalysisComplete={
-              handleAnalysisComplete
-            }
-            onAnalysisReset={
-              handleAnalysisReset
-            }
+            onAnalysisComplete={handleAnalysisComplete}
+            onAnalysisReset={handleAnalysisReset}
           />
         </div>
 
@@ -148,8 +216,8 @@ export default function ResumePage() {
                     }
                   </p>
 
-                  {analysis.candidateProfile
-                    .targetRoles.length > 0 && (
+                  {analysis.candidateProfile.targetRoles
+                    .length > 0 && (
                     <>
                       <p className="mt-5 text-xs uppercase tracking-wider text-slate-500">
                         Target Roles
@@ -190,8 +258,7 @@ export default function ResumePage() {
                 <SkillGroup
                   title="Tools & Technologies"
                   items={
-                    analysis.skills
-                      .toolsAndTechnologies
+                    analysis.skills.toolsAndTechnologies
                   }
                 />
 
@@ -232,8 +299,7 @@ export default function ResumePage() {
                 title="Missing Keywords"
               />
 
-              {analysis.ats.missingKeywords.length >
-              0 ? (
+              {analysis.ats.missingKeywords.length > 0 ? (
                 <div className="mt-5 flex flex-wrap gap-2">
                   {analysis.ats.missingKeywords.map(
                     (keyword, index) => (
@@ -279,13 +345,8 @@ export default function ResumePage() {
 
             <AnalysisList
               title="Suggested Resume Improvements"
-              icon={
-                <FileText className="h-5 w-5" />
-              }
-              items={
-                analysis.career
-                  .suggestedImprovements
-              }
+              icon={<FileText className="h-5 w-5" />}
+              items={analysis.career.suggestedImprovements}
               emptyMessage="No specific improvements were suggested."
             />
 
@@ -315,8 +376,8 @@ export default function ResumePage() {
                           {role.company}
                         </p>
 
-                        {role.responsibilities
-                          .length > 0 && (
+                        {role.responsibilities.length >
+                          0 && (
                           <div className="mt-4">
                             <p className="text-xs uppercase tracking-wider text-slate-500">
                               Responsibilities
@@ -324,14 +385,9 @@ export default function ResumePage() {
 
                             <ul className="mt-2 space-y-2">
                               {role.responsibilities.map(
-                                (
-                                  item,
-                                  itemIndex
-                                ) => (
+                                (item, itemIndex) => (
                                   <li
-                                    key={
-                                      itemIndex
-                                    }
+                                    key={itemIndex}
                                     className="text-sm leading-6 text-slate-400"
                                   >
                                     • {item}
@@ -342,8 +398,7 @@ export default function ResumePage() {
                           </div>
                         )}
 
-                        {role.achievements
-                          .length > 0 && (
+                        {role.achievements.length > 0 && (
                           <div className="mt-4">
                             <p className="text-xs uppercase tracking-wider text-slate-500">
                               Achievements
@@ -351,14 +406,9 @@ export default function ResumePage() {
 
                             <ul className="mt-2 space-y-2">
                               {role.achievements.map(
-                                (
-                                  item,
-                                  itemIndex
-                                ) => (
+                                (item, itemIndex) => (
                                   <li
-                                    key={
-                                      itemIndex
-                                    }
+                                    key={itemIndex}
                                     className="text-sm leading-6 text-slate-400"
                                   >
                                     • {item}
@@ -422,9 +472,7 @@ export default function ResumePage() {
             {analysis.certifications.length > 0 && (
               <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
                 <SectionHeader
-                  icon={
-                    <Award className="h-5 w-5" />
-                  }
+                  icon={<Award className="h-5 w-5" />}
                   title="Certifications"
                 />
 
@@ -575,10 +623,7 @@ function AnalysisList({
 }) {
   return (
     <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-      <SectionHeader
-        icon={icon}
-        title={title}
-      />
+      <SectionHeader icon={icon} title={title} />
 
       {items.length > 0 ? (
         <ul className="mt-5 space-y-3">

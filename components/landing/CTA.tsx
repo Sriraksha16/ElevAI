@@ -1,8 +1,14 @@
+
+import Link from "next/link";
+
 import { AuroraButton } from "@/components/ui/AuroraButton";
 
 export function CTA() {
   return (
-    <section id="about" className="px-6 py-24 lg:px-8">
+    <section
+      id="about"
+      className="scroll-mt-24 px-6 py-24 lg:px-8"
+    >
       <div className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/10 px-8 py-16 text-center sm:px-12">
         {/* Aurora background */}
         <div
@@ -32,14 +38,20 @@ export function CTA() {
         </h2>
 
         <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-slate-400 sm:text-lg">
-          Build a stronger resume, understand your opportunities, and walk
-          into your next interview prepared.
+          Build a stronger resume, understand your
+          opportunities, and walk into your next
+          interview prepared.
         </p>
 
         <div className="mt-8 flex justify-center">
-          <AuroraButton>Start with ElevAI</AuroraButton>
+          <Link href="/dashboard">
+            <AuroraButton>
+              Start with ElevAI
+            </AuroraButton>
+          </Link>
         </div>
       </div>
     </section>
   );
 }
+

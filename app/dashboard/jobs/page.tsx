@@ -245,7 +245,9 @@ export default function JobsPage() {
 
         if (storedJobs) {
           const parsedJobs = JSON.parse(storedJobs);
-          setJobs(normalizeStoredJobs(parsedJobs));
+          queueMicrotask(() => {
+  setJobs(normalizeStoredJobs(parsedJobs));
+});
         }
       } catch (error) {
         console.error("Could not load job tracker data:", error);
