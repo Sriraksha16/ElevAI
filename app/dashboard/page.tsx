@@ -1,99 +1,31 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 
+import { AuthStatusToast } from "@/components/AuthStatusToast";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ResumeWorkspace } from "@/components/dashboard/ResumeWorkspace";
+
 import type { ResumeAnalysis } from "@/lib/ai/resume-analyzer";
 import type { ResumeScores } from "@/lib/scoring/resume-score";
 
-const SETTINGS_STORAGE_KEY = "elevai-settings";
-
-const DEFAULT_PROFILE = {
-  name: "Sriraksha",
-  careerTitle: "Career Explorer",
-};
-
-type ProfileSettings = {
-  name: string;
-  careerTitle: string;
-};
-
 export default function DashboardPage() {
-  const [profileSettings, setProfileSettings] =
-    useState<ProfileSettings>(DEFAULT_PROFILE);
+  const searchParams = useSearchParams();
+
+  const signinSuccess =
+    searchParams.get("signin") === "success";
+
+  const { status } = useSession();
 
   const [analysis, setAnalysis] =
     useState<ResumeAnalysis | null>(null);
 
   const [scores, setScores] =
     useState<ResumeScores | null>(null);
-
-  // ----------------------------------------
-  // Load saved profile settings
-  // ----------------------------------------
-
-  useEffect(() => {
-    const loadProfileSettings = () => {
-      try {
-        const stored = localStorage.getItem(
-          SETTINGS_STORAGE_KEY
-        );
-
-        if (!stored) {
-          setProfileSettings(DEFAULT_PROFILE);
-          return;
-        }
-
-        const parsed = JSON.parse(stored);
-
-        setProfileSettings({
-          name:
-            typeof parsed.name === "string" &&
-            parsed.name.trim()
-              ? parsed.name.trim()
-              : DEFAULT_PROFILE.name,
-
-          careerTitle:
-            typeof parsed.careerTitle === "string" &&
-            parsed.careerTitle.trim()
-              ? parsed.careerTitle.trim()
-              : DEFAULT_PROFILE.careerTitle,
-        });
-      } catch {
-        setProfileSettings(DEFAULT_PROFILE);
-      }
-    };
-
-    // Load when dashboard opens
-    loadProfileSettings();
-
-    // Update when another tab/window changes localStorage
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === SETTINGS_STORAGE_KEY) {
-        loadProfileSettings();
-      }
-    };
-
-    window.addEventListener(
-      "storage",
-      handleStorageChange
-    );
-
-    return () => {
-      window.removeEventListener(
-        "storage",
-        handleStorageChange
-      );
-    };
-  }, []);
-
-  // ----------------------------------------
-  // Resume analysis handlers
-  // ----------------------------------------
 
   const handleAnalysisComplete = (
     nextAnalysis: ResumeAnalysis,
@@ -108,8 +40,22 @@ export default function DashboardPage() {
     setScores(null);
   };
 
+  if (status === "loading") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#09090b] text-white">
+        <div className="text-sm text-slate-400">
+          Loading your ElevAI workspace...
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#09090b] text-white">
+      {signinSuccess && (
+        <AuthStatusToast type="signin" />
+      )}
+
       <div className="flex min-h-screen">
         {/* Sidebar */}
         <Sidebar />
@@ -117,10 +63,7 @@ export default function DashboardPage() {
         {/* Main content */}
         <div className="flex-1">
           {/* Top bar */}
-          <DashboardHeader
-            name={profileSettings.name}
-            role={profileSettings.careerTitle}
-          />
+          <DashboardHeader />
 
           {/* Dashboard */}
           <div className="px-6 py-8 lg:px-10">
@@ -135,8 +78,9 @@ export default function DashboardPage() {
               </h2>
 
               <p className="mt-2 max-w-2xl text-slate-400">
-                Track your resume strength, application readiness,
-                and AI recommendations from one workspace.
+                Track your resume strength,
+                application readiness, and AI
+                recommendations from one workspace.
               </p>
             </div>
 
@@ -187,8 +131,12 @@ export default function DashboardPage() {
 
             {/* Resume Workspace */}
             <ResumeWorkspace
-              onAnalysisComplete={handleAnalysisComplete}
-              onAnalysisReset={handleAnalysisReset}
+              onAnalysisComplete={
+                handleAnalysisComplete
+              }
+              onAnalysisReset={
+                handleAnalysisReset
+              }
             />
 
             {/* Analysis results */}
@@ -201,7 +149,10 @@ export default function DashboardPage() {
                   </h3>
 
                   <p className="mt-4 text-sm leading-6 text-slate-300">
-                    {analysis.candidateProfile.professionalSummary}
+                    {
+                      analysis.candidateProfile
+                        .professionalSummary
+                    }
                   </p>
 
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -211,7 +162,10 @@ export default function DashboardPage() {
                       </p>
 
                       <p className="mt-2 text-sm text-slate-300">
-                        {analysis.candidateProfile.experienceLevel}
+                        {
+                          analysis.candidateProfile
+                            .experienceLevel
+                        }
                       </p>
                     </div>
 
@@ -221,8 +175,8 @@ export default function DashboardPage() {
                       </p>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {analysis.candidateProfile.targetRoles.length >
-                        0 ? (
+                        {analysis.candidateProfile
+                          .targetRoles.length > 0 ? (
                           analysis.candidateProfile.targetRoles.map(
                             (role) => (
                               <span
@@ -250,18 +204,22 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 space-y-3">
-                    {analysis.ats.strengths.length > 0 ? (
-                      analysis.ats.strengths.map((strength) => (
-                        <div
-                          key={strength}
-                          className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
-                        >
-                          {strength}
-                        </div>
-                      ))
+                    {analysis.ats.strengths.length >
+                    0 ? (
+                      analysis.ats.strengths.map(
+                        (strength) => (
+                          <div
+                            key={strength}
+                            className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
+                          >
+                            {strength}
+                          </div>
+                        )
+                      )
                     ) : (
                       <p className="text-sm text-slate-500">
-                        No specific strengths detected yet.
+                        No specific strengths detected
+                        yet.
                       </p>
                     )}
                   </div>
@@ -274,18 +232,22 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 space-y-3">
-                    {analysis.ats.weaknesses.length > 0 ? (
-                      analysis.ats.weaknesses.map((weakness) => (
-                        <div
-                          key={weakness}
-                          className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
-                        >
-                          {weakness}
-                        </div>
-                      ))
+                    {analysis.ats.weaknesses.length >
+                    0 ? (
+                      analysis.ats.weaknesses.map(
+                        (weakness) => (
+                          <div
+                            key={weakness}
+                            className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
+                          >
+                            {weakness}
+                          </div>
+                        )
+                      )
                     ) : (
                       <p className="text-sm text-slate-500">
-                        No major ATS weaknesses detected.
+                        No major ATS weaknesses
+                        detected.
                       </p>
                     )}
                   </div>
@@ -298,18 +260,22 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 space-y-3">
-                    {analysis.ats.missingKeywords.length > 0 ? (
-                      analysis.ats.missingKeywords.map((keyword) => (
-                        <div
-                          key={keyword}
-                          className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
-                        >
-                          {keyword}
-                        </div>
-                      ))
+                    {analysis.ats.missingKeywords
+                      .length > 0 ? (
+                      analysis.ats.missingKeywords.map(
+                        (keyword) => (
+                          <div
+                            key={keyword}
+                            className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
+                          >
+                            {keyword}
+                          </div>
+                        )
+                      )
                     ) : (
                       <p className="text-sm text-slate-500">
-                        No major missing keywords detected.
+                        No major missing keywords
+                        detected.
                       </p>
                     )}
                   </div>
@@ -322,15 +288,18 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 space-y-3">
-                    {analysis.career.skillGaps.length > 0 ? (
-                      analysis.career.skillGaps.map((gap) => (
-                        <div
-                          key={gap}
-                          className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
-                        >
-                          {gap}
-                        </div>
-                      ))
+                    {analysis.career.skillGaps
+                      .length > 0 ? (
+                      analysis.career.skillGaps.map(
+                        (gap) => (
+                          <div
+                            key={gap}
+                            className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-300"
+                          >
+                            {gap}
+                          </div>
+                        )
+                      )
                     ) : (
                       <p className="text-sm text-slate-500">
                         No major skill gaps detected.
@@ -346,7 +315,8 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 grid gap-3 md:grid-cols-2">
-                    {analysis.career.recommendations.length > 0 ? (
+                    {analysis.career
+                      .recommendations.length > 0 ? (
                       analysis.career.recommendations.map(
                         (recommendation) => (
                           <div
@@ -359,7 +329,8 @@ export default function DashboardPage() {
                       )
                     ) : (
                       <p className="text-sm text-slate-500">
-                        No recommendations available yet.
+                        No recommendations available
+                        yet.
                       </p>
                     )}
                   </div>
@@ -372,7 +343,8 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 grid gap-3 md:grid-cols-2">
-                    {analysis.career.suggestedImprovements.length >
+                    {analysis.career
+                      .suggestedImprovements.length >
                     0 ? (
                       analysis.career.suggestedImprovements.map(
                         (improvement) => (
@@ -386,7 +358,8 @@ export default function DashboardPage() {
                       )
                     ) : (
                       <p className="text-sm text-slate-500">
-                        No improvement suggestions available yet.
+                        No improvement suggestions
+                        available yet.
                       </p>
                     )}
                   </div>
@@ -399,15 +372,18 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 flex flex-wrap gap-2">
-                    {analysis.skills.technical.length > 0 ? (
-                      analysis.skills.technical.map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full border border-white/10 bg-white/3 px-3 py-1.5 text-xs text-slate-300"
-                        >
-                          {skill}
-                        </span>
-                      ))
+                    {analysis.skills.technical.length >
+                    0 ? (
+                      analysis.skills.technical.map(
+                        (skill) => (
+                          <span
+                            key={skill}
+                            className="rounded-full border border-white/10 bg-white/3 px-3 py-1.5 text-xs text-slate-300"
+                          >
+                            {skill}
+                          </span>
+                        )
+                      )
                     ) : (
                       <span className="text-sm text-slate-500">
                         No technical skills detected.
@@ -423,24 +399,28 @@ export default function DashboardPage() {
                   </h3>
 
                   <div className="mt-5 space-y-3">
-                    {analysis.certifications.length > 0 ? (
-                      analysis.certifications.map((certification) => (
-                        <div
-                          key={`${certification.name}-${certification.issuer}-${certification.year}`}
-                          className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3"
-                        >
-                          <p className="text-sm font-medium text-slate-200">
-                            {certification.name}
-                          </p>
+                    {analysis.certifications.length >
+                    0 ? (
+                      analysis.certifications.map(
+                        (certification) => (
+                          <div
+                            key={`${certification.name}-${certification.issuer}-${certification.year}`}
+                            className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3"
+                          >
+                            <p className="text-sm font-medium text-slate-200">
+                              {certification.name}
+                            </p>
 
-                          <p className="mt-1 text-xs text-slate-500">
-                            {certification.issuer}
-                            {certification.year
-                              ? ` • ${certification.year}`
-                              : ""}
-                          </p>
-                        </div>
-                      ))
+                            <p className="mt-1 text-xs text-slate-500">
+                              {certification.issuer}
+
+                              {certification.year
+                                ? ` • ${certification.year}`
+                                : ""}
+                            </p>
+                          </div>
+                        )
+                      )
                     ) : (
                       <p className="text-sm text-slate-500">
                         No certifications detected.
@@ -467,7 +447,8 @@ export default function DashboardPage() {
 
                   <div className="mt-6 rounded-xl border border-dashed border-white/10 p-8 text-center">
                     <p className="text-sm text-slate-400">
-                      Your resume analyses will appear here.
+                      Your resume analyses will appear
+                      here.
                     </p>
                   </div>
                 </div>
@@ -479,8 +460,8 @@ export default function DashboardPage() {
 
                   <div className="mt-6 rounded-xl border border-dashed border-white/10 p-8 text-center">
                     <p className="text-sm text-slate-400">
-                      AI recommendations will appear after your first
-                      analysis.
+                      AI recommendations will appear
+                      after your first analysis.
                     </p>
                   </div>
                 </div>
@@ -492,4 +473,3 @@ export default function DashboardPage() {
     </main>
   );
 }
-
