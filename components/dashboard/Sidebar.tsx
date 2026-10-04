@@ -63,7 +63,7 @@ export function Sidebar() {
     <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-white/5 bg-[#08080c]">
       {/* Logo */}
       <div className="px-6 py-6">
-        <Link href="/dashboard" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <div className="aurora-gradient flex h-9 w-9 items-center justify-center rounded-xl font-bold text-white shadow-lg shadow-indigo-500/20">
             E
           </div>

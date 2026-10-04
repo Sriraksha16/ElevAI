@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   Bell,
   Check,
   FileText,
+  Loader2,
   RotateCcw,
   Save,
   Settings as SettingsIcon,
@@ -14,56 +16,223 @@ import {
 import { PageBackLink } from "@/components/dashboard/PageBackLink";
 
 type Settings = {
-  name: string;
-  careerTitle: string;
   preferredTone: "professional" | "confident" | "friendly";
   resumeFormat: "pdf" | "docx";
   emailNotifications: boolean;
   applicationReminders: boolean;
 };
 
+type Profile = {
+  id: string;
+  name: string;
+  email: string;
+  careerTitle: string;
+  createdAt: string;
+};
+
 const DEFAULT_SETTINGS: Settings = {
-  name: "Sriraksha",
-  careerTitle: "Career Explorer",
   preferredTone: "professional",
   resumeFormat: "pdf",
   emailNotifications: true,
   applicationReminders: true,
 };
 
-const STORAGE_KEY = "elevai-settings";
-
-function loadSettings(): Settings {
-  if (typeof window === "undefined") {
-    return DEFAULT_SETTINGS;
-  }
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-
-    if (!stored) {
-      return DEFAULT_SETTINGS;
-    }
-
-    const parsed = JSON.parse(stored);
-
-    if (!parsed || typeof parsed !== "object") {
-      return DEFAULT_SETTINGS;
-    }
-
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
-
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
-  const [saved, setSaved] = useState(false);
+  const { update: updateSession } = useSession();
 
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  const [settings, setSettings] =
+    useState<Settings>(DEFAULT_SETTINGS);
+
+  const [profileLoading, setProfileLoading] =
+    useState(true);
+
+  const [settingsLoading, setSettingsLoading] =
+    useState(true);
+
+  const [profileSaving, setProfileSaving] =
+    useState(false);
+
+  const [settingsSaving, setSettingsSaving] =
+    useState(false);
+
+  const [profileSaved, setProfileSaved] =
+    useState(false);
+
+  const [settingsSaved, setSettingsSaved] =
+    useState(false);
+
+  const [profileError, setProfileError] =
+    useState("");
+
+  const [settingsError, setSettingsError] =
+    useState("");
+
+  // -----------------------------------------
+  // LOAD PROFILE
+  // -----------------------------------------
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        setProfileLoading(true);
+        setProfileError("");
+
+        const response = await fetch(
+          "/api/account/profile",
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message ||
+              "Unable to load your profile."
+          );
+        }
+
+        setProfile(data.user);
+      } catch (error) {
+        setProfileError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load your profile."
+        );
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+
+    loadProfile();
+  }, []);
+
+  // -----------------------------------------
+  // LOAD ACCOUNT SETTINGS
+  // -----------------------------------------
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        setSettingsLoading(true);
+        setSettingsError("");
+
+        const response = await fetch(
+          "/api/account/settings",
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.message ||
+              "Unable to load your settings."
+          );
+        }
+
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...data.settings,
+        });
+      } catch (error) {
+        setSettingsError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load your settings."
+        );
+      } finally {
+        setSettingsLoading(false);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  // -----------------------------------------
+  // PROFILE
+  // -----------------------------------------
+  function updateProfile(
+    key: "name" | "careerTitle",
+    value: string
+  ) {
+    setProfile((current) =>
+      current
+        ? {
+            ...current,
+            [key]: value,
+          }
+        : current
+    );
+
+    setProfileSaved(false);
+    setProfileError("");
+  }
+
+  async function handleProfileSave() {
+    if (!profile) {
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileSaved(false);
+    setProfileError("");
+
+    try {
+      const response = await fetch(
+        "/api/account/profile",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: profile.name,
+            careerTitle: profile.careerTitle,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "Unable to update your profile."
+        );
+      }
+
+      setProfile(data.user);
+
+      await updateSession({
+        name: data.user.name,
+        careerTitle: data.user.careerTitle,
+      });
+
+      setProfileSaved(true);
+
+      window.setTimeout(() => {
+        setProfileSaved(false);
+      }, 2500);
+    } catch (error) {
+      setProfileError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update your profile."
+      );
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  // -----------------------------------------
+  // SETTINGS
+  // -----------------------------------------
   function updateSetting<K extends keyof Settings>(
     key: K,
     value: Settings[K]
@@ -73,26 +242,61 @@ export default function SettingsPage() {
       [key]: value,
     }));
 
-    setSaved(false);
+    setSettingsSaved(false);
+    setSettingsError("");
   }
 
-  function handleSave() {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(settings)
-    );
+  async function handleSaveSettings() {
+    setSettingsSaving(true);
+    setSettingsSaved(false);
+    setSettingsError("");
 
-    setSaved(true);
+    try {
+      const response = await fetch(
+        "/api/account/settings",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(settings),
+        }
+      );
 
-    window.setTimeout(() => {
-      setSaved(false);
-    }, 2500);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "Unable to save your settings."
+        );
+      }
+
+      setSettings({
+        ...DEFAULT_SETTINGS,
+        ...data.settings,
+      });
+
+      setSettingsSaved(true);
+
+      window.setTimeout(() => {
+        setSettingsSaved(false);
+      }, 2500);
+    } catch (error) {
+      setSettingsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save your settings."
+      );
+    } finally {
+      setSettingsSaving(false);
+    }
   }
 
-  function handleReset() {
+  function handleResetSettings() {
     setSettings(DEFAULT_SETTINGS);
-    localStorage.removeItem(STORAGE_KEY);
-    setSaved(false);
+    setSettingsSaved(false);
+    setSettingsError("");
   }
 
   return (
@@ -116,92 +320,156 @@ export default function SettingsPage() {
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Customize your ElevAI experience and
-                career preferences.
+                Manage your ElevAI account and career
+                preferences.
               </p>
             </div>
           </div>
         </div>
 
         <div className="mt-8 space-y-6">
+          {/* PROFILE */}
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
               icon={<User className="h-5 w-5" />}
               title="Profile"
-              description="Basic information used throughout your ElevAI workspace."
+              description="Your account information is connected to your ElevAI account."
             />
 
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <Field label="Name">
-                <input
-                  type="text"
-                  value={settings.name}
-                  onChange={(event) =>
-                    updateSetting(
-                      "name",
-                      event.target.value
-                    )
-                  }
-                  className="settings-input"
-                  placeholder="Your name"
-                />
-              </Field>
+            {profileError && (
+              <ErrorMessage message={profileError} />
+            )}
 
-              <Field label="Career Title">
-                <input
-                  type="text"
-                  value={settings.careerTitle}
-                  onChange={(event) =>
-                    updateSetting(
-                      "careerTitle",
-                      event.target.value
-                    )
-                  }
-                  className="settings-input"
-                  placeholder="e.g. Software Developer"
-                />
-              </Field>
-            </div>
+            {profileLoading ? (
+              <LoadingMessage text="Loading your profile..." />
+            ) : profile ? (
+              <>
+                <div className="mt-6 grid gap-5 md:grid-cols-2">
+                  <Field label="Name">
+                    <input
+                      type="text"
+                      value={profile.name}
+                      onChange={(event) =>
+                        updateProfile(
+                          "name",
+                          event.target.value
+                        )
+                      }
+                      className="settings-input"
+                      placeholder="Your name"
+                    />
+                  </Field>
+
+                  <Field
+                    label="Email"
+                    description="Your login email is managed by your account."
+                  >
+                    <input
+                      type="email"
+                      value={profile.email}
+                      disabled
+                      className="settings-input cursor-not-allowed opacity-60"
+                    />
+                  </Field>
+
+                  <Field label="Career Title">
+                    <input
+                      type="text"
+                      value={profile.careerTitle}
+                      onChange={(event) =>
+                        updateProfile(
+                          "careerTitle",
+                          event.target.value
+                        )
+                      }
+                      className="settings-input"
+                      placeholder="e.g. Software Developer"
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-slate-500">
+                    Changes here update your ElevAI
+                    account profile.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleProfileSave}
+                    disabled={profileSaving}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {profileSaving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : profileSaved ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+
+                    {profileSaving
+                      ? "Saving..."
+                      : profileSaved
+                        ? "Profile Saved"
+                        : "Save Profile"}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </section>
 
+          {/* AI PREFERENCES */}
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
-              icon={<SettingsIcon className="h-5 w-5" />}
+              icon={
+                <SettingsIcon className="h-5 w-5" />
+              }
               title="AI Preferences"
               description="Choose how ElevAI should tailor generated career content."
             />
 
-            <div className="mt-6">
-              <Field
-                label="Preferred Writing Tone"
-                description="Used by supported AI writing features such as Cover Letter Generator."
-              >
-                <select
-                  value={settings.preferredTone}
-                  onChange={(event) =>
-                    updateSetting(
-                      "preferredTone",
-                      event.target.value as Settings["preferredTone"]
-                    )
-                  }
-                  className="settings-input"
+            {settingsError && (
+              <ErrorMessage message={settingsError} />
+            )}
+
+            {settingsLoading ? (
+              <LoadingMessage text="Loading your preferences..." />
+            ) : (
+              <div className="mt-6">
+                <Field
+                  label="Preferred Writing Tone"
+                  description="Used by supported AI writing features such as Cover Letter Generator."
                 >
-                  <option value="professional">
-                    Professional
-                  </option>
+                  <select
+                    value={settings.preferredTone}
+                    onChange={(event) =>
+                      updateSetting(
+                        "preferredTone",
+                        event.target
+                          .value as Settings["preferredTone"]
+                      )
+                    }
+                    className="settings-input"
+                  >
+                    <option value="professional">
+                      Professional
+                    </option>
 
-                  <option value="confident">
-                    Confident
-                  </option>
+                    <option value="confident">
+                      Confident
+                    </option>
 
-                  <option value="friendly">
-                    Friendly
-                  </option>
-                </select>
-              </Field>
-            </div>
+                    <option value="friendly">
+                      Friendly
+                    </option>
+                  </select>
+                </Field>
+              </div>
+            )}
           </section>
 
+          {/* RESUME PREFERENCES */}
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
               icon={<FileText className="h-5 w-5" />}
@@ -209,75 +477,89 @@ export default function SettingsPage() {
               description="Choose your preferred resume format."
             />
 
-            <div className="mt-6">
-              <Field label="Preferred Resume Format">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <ChoiceButton
-                    selected={
-                      settings.resumeFormat === "pdf"
-                    }
-                    onClick={() =>
-                      updateSetting(
-                        "resumeFormat",
+            {settingsLoading ? (
+              <LoadingMessage text="Loading your preferences..." />
+            ) : (
+              <div className="mt-6">
+                <Field label="Preferred Resume Format">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ChoiceButton
+                      selected={
+                        settings.resumeFormat ===
                         "pdf"
-                      )
-                    }
-                    title="PDF"
-                    description="Best for consistent document formatting."
-                  />
+                      }
+                      onClick={() =>
+                        updateSetting(
+                          "resumeFormat",
+                          "pdf"
+                        )
+                      }
+                      title="PDF"
+                      description="Best for consistent document formatting."
+                    />
 
-                  <ChoiceButton
-                    selected={
-                      settings.resumeFormat === "docx"
-                    }
-                    onClick={() =>
-                      updateSetting(
-                        "resumeFormat",
+                    <ChoiceButton
+                      selected={
+                        settings.resumeFormat ===
                         "docx"
-                      )
-                    }
-                    title="DOCX"
-                    description="Easy to edit in Microsoft Word."
-                  />
-                </div>
-              </Field>
-            </div>
+                      }
+                      onClick={() =>
+                        updateSetting(
+                          "resumeFormat",
+                          "docx"
+                        )
+                      }
+                      title="DOCX"
+                      description="Easy to edit in Microsoft Word."
+                    />
+                  </div>
+                </Field>
+              </div>
+            )}
           </section>
 
+          {/* NOTIFICATIONS */}
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <SectionHeader
               icon={<Bell className="h-5 w-5" />}
               title="Notifications"
-              description="Control which local notification preferences are enabled."
+              description="Control your ElevAI notification preferences."
             />
 
-            <div className="mt-6 space-y-4">
-              <Toggle
-                label="Email Notifications"
-                description="Receive important ElevAI account and feature notifications."
-                enabled={settings.emailNotifications}
-                onChange={(value) =>
-                  updateSetting(
-                    "emailNotifications",
-                    value
-                  )
-                }
-              />
+            {settingsLoading ? (
+              <LoadingMessage text="Loading your preferences..." />
+            ) : (
+              <div className="mt-6 space-y-4">
+                <Toggle
+                  label="Email Notifications"
+                  description="Receive important ElevAI account and feature notifications."
+                  enabled={settings.emailNotifications}
+                  onChange={(value) =>
+                    updateSetting(
+                      "emailNotifications",
+                      value
+                    )
+                  }
+                />
 
-              <Toggle
-                label="Application Reminders"
-                description="Allow ElevAI to use your preference for future job application reminders."
-                enabled={settings.applicationReminders}
-                onChange={(value) =>
-                  updateSetting(
-                    "applicationReminders",
-                    value
-                  )
-                }
-              />
-            </div>
+                <Toggle
+                  label="Application Reminders"
+                  description="Allow ElevAI to use your preference for future job application reminders."
+                  enabled={
+                    settings.applicationReminders
+                  }
+                  onChange={(value) =>
+                    updateSetting(
+                      "applicationReminders",
+                      value
+                    )
+                  }
+                />
+              </div>
+            )}
           </section>
 
+          {/* SAVE */}
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -286,16 +568,17 @@ export default function SettingsPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Your current settings are stored
-                  locally in this browser.
+                  Your preferences are saved to your
+                  ElevAI account.
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={handleReset}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
+                  onClick={handleResetSettings}
+                  disabled={settingsSaving}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
                 >
                   <RotateCcw className="h-4 w-4" />
                   Reset
@@ -303,18 +586,23 @@ export default function SettingsPage() {
 
                 <button
                   type="button"
-                  onClick={handleSave}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-indigo-400"
+                  onClick={handleSaveSettings}
+                  disabled={settingsSaving || settingsLoading}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {saved ? (
+                  {settingsSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : settingsSaved ? (
                     <Check className="h-4 w-4" />
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
 
-                  {saved
-                    ? "Saved"
-                    : "Save Settings"}
+                  {settingsSaving
+                    ? "Saving..."
+                    : settingsSaved
+                      ? "Saved"
+                      : "Save Settings"}
                 </button>
               </div>
             </div>
@@ -374,9 +662,7 @@ function Field({
         </p>
       )}
 
-      <div className="mt-3">
-        {children}
-      </div>
+      <div className="mt-3">{children}</div>
     </div>
   );
 }
@@ -466,5 +752,22 @@ function Toggle({
         />
       </div>
     </button>
+  );
+}
+
+function LoadingMessage({ text }: { text: string }) {
+  return (
+    <div className="mt-6 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-5 text-sm text-slate-400">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      {text}
+    </div>
+  );
+}
+
+function ErrorMessage({ message }: { message: string }) {
+  return (
+    <div className="mt-5 rounded-xl border border-red-400/20 bg-red-400/[0.06] px-4 py-3 text-sm text-red-200">
+      {message}
+    </div>
   );
 }
