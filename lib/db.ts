@@ -183,14 +183,29 @@ addColumnIfMissing(
 );
 
 //
-// JOB APPLICATION INDEXES
+// CAREER INSIGHTS
 //
 db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_job_applications_user_id
-  ON job_applications(user_id);
-
-  CREATE INDEX IF NOT EXISTS idx_job_applications_user_status
-  ON job_applications(user_id, status);
+  CREATE TABLE IF NOT EXISTS career_insights (
+    id TEXT PRIMARY KEY,
+    resume_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    insights_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, resume_id),
+    FOREIGN KEY (resume_id) REFERENCES resumes(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )
 `);
 
+//
+// CAREER INSIGHTS INDEX
+//
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_career_insights_user_resume
+  ON career_insights(user_id, resume_id);
+
+  CREATE INDEX IF NOT EXISTS idx_career_insights_user_id
+  ON career_insights(user_id);
+`);
 export default db;

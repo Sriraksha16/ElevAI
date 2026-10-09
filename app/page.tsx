@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { AuroraButton } from "@/components/ui/AuroraButton";
+
 import { Navbar } from "@/components/landing/Navbar";
 import { Hero } from "@/components/landing/Hero";
 import { Features } from "@/components/landing/Features";
@@ -19,31 +19,33 @@ export default function Home() {
   const [logoutSuccess, setLogoutSuccess] =
     useState(false);
 
-  useEffect(() => {
-    const params = new URLSearchParams(
-      window.location.search
-    );
+ useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
 
-    if (params.get("logout") === "success") {
-      setLogoutSuccess(true);
+  if (params.get("logout") !== "success") {
+    return;
+  }
 
-      // Remove the query parameter from the URL
-      // without refreshing the page.
-      window.history.replaceState(
-        {},
-        "",
-        window.location.pathname
-      );
+  window.history.replaceState({}, "", window.location.pathname);
 
-      const timer = window.setTimeout(() => {
-        setLogoutSuccess(false);
-      }, 3500);
+  let hideTimer: number | undefined;
 
-      return () => {
-        window.clearTimeout(timer);
-      };
+  const showTimer = window.setTimeout(() => {
+    setLogoutSuccess(true);
+
+    hideTimer = window.setTimeout(() => {
+      setLogoutSuccess(false);
+    }, 3500);
+  }, 0);
+
+  return () => {
+    window.clearTimeout(showTimer);
+
+    if (hideTimer !== undefined) {
+      window.clearTimeout(hideTimer);
     }
-  }, []);
+  };
+}, []);
 
   return (
     <main className="min-h-screen overflow-hidden">

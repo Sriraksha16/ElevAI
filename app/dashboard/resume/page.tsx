@@ -1,6 +1,7 @@
+
 "use client";
 
-import { ChangeEvent, useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -58,6 +59,12 @@ type AnalyzeResponse = {
   scores?: Record<string, unknown>;
 };
 
+type HistoryResponse = {
+  success: boolean;
+  message?: string;
+  versions?: ResumeVersion[];
+};
+
 export default function ResumePage() {
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [selectedVersion, setSelectedVersion] =
@@ -68,57 +75,84 @@ export default function ResumePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadHistory() {
-    try {
-      setLoadingHistory(true);
-      setError("");
+  async function loadHistory(): Promise<ResumeVersion[]> {
+    const response = await fetch("/api/resume/history", {
+      method: "GET",
+      cache: "no-store",
+    });
 
-      const response = await fetch("/api/resume/history", {
-        method: "GET",
-        cache: "no-store",
-      });
+    const data = (await response.json()) as HistoryResponse;
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message || "Unable to load resume history."
-        );
-      }
-
-      setVersions(data.versions || []);
-
-      if (data.versions?.length > 0) {
-        const newest =
-          data.versions[data.versions.length - 1];
-
-        setSelectedVersion(newest);
-      } else {
-        setSelectedVersion(null);
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to load resume history."
-      );
-    } finally {
-      setLoadingHistory(false);
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Unable to load resume history.");
     }
+
+    const loadedVersions = data.versions ?? [];
+
+    setVersions(loadedVersions);
+
+    if (loadedVersions.length > 0) {
+      setSelectedVersion(loadedVersions[loadedVersions.length - 1]);
+    } else {
+      setSelectedVersion(null);
+    }
+
+    setError("");
+    return loadedVersions;
   }
 
   useEffect(() => {
-    loadHistory();
+    let cancelled = false;
+
+    async function fetchInitialHistory() {
+      try {
+        const response = await fetch("/api/resume/history", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const data = (await response.json()) as HistoryResponse;
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Unable to load resume history.");
+        }
+
+        if (cancelled) return;
+
+        const loadedVersions = data.versions ?? [];
+        setVersions(loadedVersions);
+        setSelectedVersion(
+          loadedVersions.length > 0
+            ? loadedVersions[loadedVersions.length - 1]
+            : null
+        );
+        setError("");
+      } catch (err) {
+        if (cancelled) return;
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load resume history."
+        );
+      } finally {
+        if (!cancelled) {
+          setLoadingHistory(false);
+        }
+      }
+    }
+
+    void fetchInitialHistory();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function handleUpload(
-    event: ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     setUploading(true);
     setMessage("");
@@ -133,41 +167,23 @@ export default function ResumePage() {
         body: formData,
       });
 
-      const data =
-        (await response.json()) as AnalyzeResponse;
+      const data = (await response.json()) as AnalyzeResponse;
 
       if (!response.ok || !data.success) {
-        throw new Error(
-          data.message || "Resume analysis failed."
-        );
+        throw new Error(data.message || "Resume analysis failed.");
       }
 
       setMessage(data.message);
 
-      await loadHistory();
+      const loadedVersions = await loadHistory();
 
       if (data.resumeId) {
-        const refreshed = await fetch(
-          "/api/resume/history",
-          {
-            cache: "no-store",
-          }
+        const matchingVersion = loadedVersions.find(
+          (item) => item.resumeId === data.resumeId
         );
 
-        const historyData = await refreshed.json();
-
-        if (historyData.success) {
-          const matchingVersion =
-            historyData.versions.find(
-              (item: ResumeVersion) =>
-                item.resumeId === data.resumeId
-            );
-
-          if (matchingVersion) {
-            setSelectedVersion(matchingVersion);
-          }
-
-          setVersions(historyData.versions);
+        if (matchingVersion) {
+          setSelectedVersion(matchingVersion);
         }
       }
     } catch (err) {
@@ -178,7 +194,6 @@ export default function ResumePage() {
       );
     } finally {
       setUploading(false);
-
       // Allow selecting the same file again.
       event.target.value = "";
     }
@@ -200,9 +215,7 @@ export default function ResumePage() {
     });
   }
 
-  function getScore(
-    version: ResumeVersion
-  ): number | null {
+  function getScore(version: ResumeVersion): number | null {
     const atsScore = version.analysis?.ats?.score;
 
     if (typeof atsScore === "number") {
@@ -260,13 +273,19 @@ export default function ResumePage() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-              Upload your resume, analyze it with AI, and keep
-              every meaningful version in your career workspace.
+              Upload your resume, analyze it with AI, and keep every
+              meaningful version in your career workspace.
             </p>
           </div>
 
           {/* Upload */}
-          <label className="group inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-400">
+          <label
+            className={`group inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-400 ${
+              uploading
+                ? "cursor-not-allowed opacity-70"
+                : "cursor-pointer"
+            }`}
+          >
             {uploading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -300,8 +319,8 @@ export default function ResumePage() {
 
               {message.toLowerCase().includes("reused") && (
                 <p className="mt-1 text-xs text-emerald-300/70">
-                  No new AI analysis was required for this
-                  identical resume version.
+                  No new AI analysis was required for this identical resume
+                  version.
                 </p>
               )}
             </div>
@@ -321,7 +340,6 @@ export default function ResumePage() {
               <h2 className="text-lg font-semibold">
                 Resume Version History
               </h2>
-
               <p className="mt-1 text-xs text-slate-500">
                 Every changed resume is stored separately.
               </p>
@@ -346,87 +364,81 @@ export default function ResumePage() {
               </h3>
 
               <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-                Upload your first resume to create your first
-                AI-powered resume version.
+                Upload your first resume to create your first AI-powered
+                resume version.
               </p>
             </div>
           ) : (
             <div className="grid gap-3">
-              {[...versions]
-                .reverse()
-                .map((version) => {
-                  const isSelected =
-                    selectedVersion?.resumeId ===
-                    version.resumeId;
+              {[...versions].reverse().map((version) => {
+                const isSelected =
+                  selectedVersion?.resumeId === version.resumeId;
+                const score = getScore(version);
 
-                  const score = getScore(version);
-
-                  return (
-                    <button
-                      key={version.resumeId}
-                      type="button"
-                      onClick={() =>
-                        setSelectedVersion(version)
-                      }
-                      className={`w-full rounded-2xl border p-4 text-left transition ${
-                        isSelected
-                          ? "border-indigo-400/40 bg-indigo-500/[0.08]"
-                          : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
-                      }`}
-                    >
-                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                              isSelected
-                                ? "bg-indigo-500/20 text-indigo-300"
-                                : "bg-white/[0.05] text-slate-400"
-                            }`}
-                          >
-                            <FileText className="h-5 w-5" />
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-md bg-indigo-500/15 px-2 py-1 text-[11px] font-semibold text-indigo-300">
-                                V{version.version}
-                              </span>
-
-                              {version.analysisId && (
-                                <span className="rounded-md bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">
-                                  AI analyzed
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="mt-2 truncate text-sm font-medium text-slate-200">
-                              {version.fileName}
-                            </p>
-
-                            <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-                              <Clock3 className="h-3 w-3" />
-                              {formatDate(version.createdAt)}
-                            </p>
-                          </div>
+                return (
+                  <button
+                    key={version.resumeId}
+                    type="button"
+                    onClick={() => setSelectedVersion(version)}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                      isSelected
+                        ? "border-indigo-400/40 bg-indigo-500/[0.08]"
+                        : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                            isSelected
+                              ? "bg-indigo-500/20 text-indigo-300"
+                              : "bg-white/[0.05] text-slate-400"
+                          }`}
+                        >
+                          <FileText className="h-5 w-5" />
                         </div>
 
-                        {score !== null && (
-                          <div className="shrink-0 text-left md:text-right">
-                            <p className="text-[11px] uppercase tracking-wider text-slate-500">
-                              ATS Score
-                            </p>
-                            <p className="mt-1 text-xl font-semibold text-white">
-                              {Math.round(score)}
-                              <span className="text-sm text-slate-500">
-                                /100
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-md bg-indigo-500/15 px-2 py-1 text-[11px] font-semibold text-indigo-300">
+                              V{version.version}
+                            </span>
+
+                            {version.analysisId && (
+                              <span className="rounded-md bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">
+                                AI analyzed
                               </span>
-                            </p>
+                            )}
                           </div>
-                        )}
+
+                          <p className="mt-2 truncate text-sm font-medium text-slate-200">
+                            {version.fileName}
+                          </p>
+
+                          <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                            <Clock3 className="h-3 w-3" />
+                            {formatDate(version.createdAt)}
+                          </p>
+                        </div>
                       </div>
-                    </button>
-                  );
-                })}
+
+                      {score !== null && (
+                        <div className="shrink-0 text-left md:text-right">
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500">
+                            ATS Score
+                          </p>
+                          <p className="mt-1 text-xl font-semibold text-white">
+                            {Math.round(score)}
+                            <span className="text-sm text-slate-500">
+                              /100
+                            </span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>
@@ -438,15 +450,13 @@ export default function ResumePage() {
               <div>
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-indigo-400" />
-
                   <span className="text-xs font-medium uppercase tracking-wider text-indigo-300">
                     AI Analysis
                   </span>
                 </div>
 
                 <h2 className="mt-2 text-xl font-semibold">
-                  V{selectedVersion.version} ·{" "}
-                  {selectedVersion.fileName}
+                  V{selectedVersion.version} · {selectedVersion.fileName}
                 </h2>
               </div>
 
@@ -455,14 +465,9 @@ export default function ResumePage() {
                   <p className="text-[10px] uppercase tracking-wider text-slate-500">
                     ATS Score
                   </p>
-
                   <p className="mt-1 text-2xl font-bold text-white">
-                    {Math.round(
-                      getScore(selectedVersion) as number
-                    )}
-                    <span className="text-sm text-slate-500">
-                      /100
-                    </span>
+                    {Math.round(getScore(selectedVersion) as number)}
+                    <span className="text-sm text-slate-500">/100</span>
                   </p>
                 </div>
               )}
@@ -479,8 +484,8 @@ export default function ResumePage() {
                   ?.professionalSummary && (
                   <p className="mt-3 text-sm leading-6 text-slate-400">
                     {
-                      selectedVersion.analysis
-                        .candidateProfile.professionalSummary
+                      selectedVersion.analysis.candidateProfile
+                        .professionalSummary
                     }
                   </p>
                 )}
@@ -491,8 +496,8 @@ export default function ResumePage() {
                     Experience level:{" "}
                     <span className="text-slate-300">
                       {
-                        selectedVersion.analysis
-                          .candidateProfile.experienceLevel
+                        selectedVersion.analysis.candidateProfile
+                          .experienceLevel
                       }
                     </span>
                   </p>
@@ -507,8 +512,8 @@ export default function ResumePage() {
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(
-                    selectedVersion.analysis
-                      .candidateProfile?.targetRoles || []
+                    selectedVersion.analysis.candidateProfile?.targetRoles ??
+                    []
                   ).map((role) => (
                     <span
                       key={role}
@@ -518,8 +523,8 @@ export default function ResumePage() {
                     </span>
                   ))}
 
-                  {!selectedVersion.analysis.candidateProfile
-                    ?.targetRoles?.length && (
+                  {!selectedVersion.analysis.candidateProfile?.targetRoles
+                    ?.length && (
                     <span className="text-sm text-slate-500">
                       No target roles identified.
                     </span>
@@ -535,8 +540,7 @@ export default function ResumePage() {
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(
-                    selectedVersion.analysis.skills?.technical ||
-                    []
+                    selectedVersion.analysis.skills?.technical ?? []
                   ).map((skill) => (
                     <span
                       key={skill}
@@ -546,8 +550,7 @@ export default function ResumePage() {
                     </span>
                   ))}
 
-                  {!selectedVersion.analysis.skills?.technical
-                    ?.length && (
+                  {!selectedVersion.analysis.skills?.technical?.length && (
                     <span className="text-sm text-slate-500">
                       No technical skills identified.
                     </span>
@@ -562,21 +565,19 @@ export default function ResumePage() {
                 </h3>
 
                 <ul className="mt-3 space-y-2">
-                  {(
-                    selectedVersion.analysis.ats?.strengths ||
-                    []
-                  ).slice(0, 5).map((item) => (
-                    <li
-                      key={item}
-                      className="flex gap-2 text-sm leading-5 text-slate-400"
-                    >
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                      {item}
-                    </li>
-                  ))}
+                  {(selectedVersion.analysis.ats?.strengths ?? [])
+                    .slice(0, 5)
+                    .map((item) => (
+                      <li
+                        key={item}
+                        className="flex gap-2 text-sm leading-5 text-slate-400"
+                      >
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                        {item}
+                      </li>
+                    ))}
 
-                  {!selectedVersion.analysis.ats?.strengths
-                    ?.length && (
+                  {!selectedVersion.analysis.ats?.strengths?.length && (
                     <li className="text-sm text-slate-500">
                       No strengths identified.
                     </li>

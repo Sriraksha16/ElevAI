@@ -1,9 +1,12 @@
+
 "use client";
 
 import {
-  FormEvent,
+  Suspense,
   useState,
 } from "react";
+
+import type { FormEvent } from "react";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -15,29 +18,23 @@ import {
   Lock,
 } from "lucide-react";
 
-export default function ResetPasswordPage() {
-  const searchParams =
-    useSearchParams();
+function ResetPasswordContent() {
+  const searchParams = useSearchParams();
 
-  const token =
-    searchParams.get("token") || "";
+  const token = searchParams.get("token") || "";
 
-  const [password, setPassword] =
-    useState("");
+  const [password, setPassword] = useState("");
 
   const [
     confirmPassword,
     setConfirmPassword,
   ] = useState("");
 
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [success, setSuccess] =
-    useState(false);
+  const [success, setSuccess] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -60,9 +57,7 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (
-      password !== confirmPassword
-    ) {
+    if (password !== confirmPassword) {
       setError(
         "The passwords do not match."
       );
@@ -77,8 +72,7 @@ export default function ResetPasswordPage() {
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             token,
@@ -87,8 +81,7 @@ export default function ResetPasswordPage() {
         }
       );
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
         setError(
@@ -168,9 +161,7 @@ export default function ResetPasswordPage() {
                       required
                       value={password}
                       onChange={(event) =>
-                        setPassword(
-                          event.target.value
-                        )
+                        setPassword(event.target.value)
                       }
                       className="w-full rounded-xl border border-white/10 bg-black/20 py-3 pl-10 pr-4 text-sm text-white outline-none focus:border-violet-400/40"
                     />
@@ -192,9 +183,7 @@ export default function ResetPasswordPage() {
                     required
                     value={confirmPassword}
                     onChange={(event) =>
-                      setConfirmPassword(
-                        event.target.value
-                      )
+                      setConfirmPassword(event.target.value)
                     }
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-violet-400/40"
                   />
@@ -229,5 +218,21 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#050509] px-6 text-white">
+          <div className="text-sm text-slate-400">
+            Loading password reset...
+          </div>
+        </main>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

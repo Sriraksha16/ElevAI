@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -13,7 +13,7 @@ import { ResumeWorkspace } from "@/components/dashboard/ResumeWorkspace";
 import type { ResumeAnalysis } from "@/lib/ai/resume-analyzer";
 import type { ResumeScores } from "@/lib/scoring/resume-score";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const searchParams = useSearchParams();
 
   const signinSuccess =
@@ -175,8 +175,8 @@ export default function DashboardPage() {
                       </p>
 
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {analysis.candidateProfile
-                          .targetRoles.length > 0 ? (
+                        {analysis.candidateProfile.targetRoles
+                          .length > 0 ? (
                           analysis.candidateProfile.targetRoles.map(
                             (role) => (
                               <span
@@ -471,5 +471,21 @@ export default function DashboardPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#09090b] text-white">
+          <div className="text-sm text-slate-400">
+            Loading your ElevAI workspace...
+          </div>
+        </main>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }
