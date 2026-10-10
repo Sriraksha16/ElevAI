@@ -1,8 +1,16 @@
+
 import { getPath } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
+import { getServerSession } from "next-auth";
 
+import { authOptions } from "@/lib/auth-options";
 import { generateCoverLetter } from "@/lib/ai/cover-letter-generator";
+import {
+  reserveAiUsage,
+  completeAiUsage,
+  releaseAiUsage,
+} from "@/lib/ai/usage-limits";
 
 PDFParse.setWorker(getPath());
 
@@ -25,10 +33,6 @@ function isTone(
   );
 }
 
-/**
- * Detect PDFs that contain a website/security
- * verification page instead of the actual resume.
- */
 function looksLikeSecurityVerificationPage(
   text: string
 ): boolean {
@@ -45,7 +49,7 @@ function looksLikeSecurityVerificationPage(
     "checking your browser",
     "checking your browser before accessing",
     "verify you are human",
-    "verify you’re human",
+    "verify youâ€™re human",
     "verification required",
     "security verification",
     "security check",
@@ -67,19 +71,10 @@ function looksLikeSecurityVerificationPage(
       normalized.includes(indicator)
     );
 
-  /*
-   * A single generic phrase should not automatically
-   * reject a legitimate resume. Require stronger evidence
-   * when possible.
-   */
   if (matchedIndicators.length >= 2) {
     return true;
   }
 
-  /*
-   * These phrases are highly characteristic of
-   * verification/interstitial pages.
-   */
   const strongSecurityIndicators = [
     "checking your browser",
     "verify you are human",
@@ -95,25 +90,13 @@ function looksLikeSecurityVerificationPage(
   );
 }
 
-/**
- * Check whether the extracted document contains
- * enough resume-like information to send to the AI.
- */
 function looksLikeResume(text: string): boolean {
   const normalized = text
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!normalized) {
-    return false;
-  }
-
-  /*
-   * Very small extracted documents are usually not
-   * complete resumes.
-   */
-  if (normalized.length < 150) {
+  if (!normalized || normalized.length < 150) {
     return false;
   }
 
@@ -139,26 +122,38 @@ function looksLikeResume(text: string): boolean {
     normalized.includes(indicator)
   );
 
-  /*
-   * A legitimate resume will normally contain several
-   * recognizable resume sections.
-   */
   return matches.length >= 2;
 }
 
 export async function POST(request: Request) {
+  let reservationId: string | null = null;
+
   try {
+    // ----------------------------------------
+    // AUTHENTICATION
+    // ----------------------------------------
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return Response.json(
+        {
+          success: false,
+          message: "Please sign in to use this AI feature.",
+        },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
 
     const resume = formData.get("resume");
-    const jobDescription =
-      formData.get("jobDescription");
+    const jobDescription = formData.get("jobDescription");
     const tone = formData.get("tone");
 
     // ----------------------------------------
-    // Validate resume
+    // VALIDATE RESUME
     // ----------------------------------------
-
     if (!(resume instanceof File)) {
       return Response.json(
         {
@@ -173,8 +168,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           success: false,
-          message:
-            "The uploaded resume is empty.",
+          message: "The uploaded resume is empty.",
         },
         { status: 400 }
       );
@@ -184,17 +178,15 @@ export async function POST(request: Request) {
       return Response.json(
         {
           success: false,
-          message:
-            "Resume must be smaller than 5 MB.",
+          message: "Resume must be smaller than 5 MB.",
         },
         { status: 400 }
       );
     }
 
     // ----------------------------------------
-    // Validate job description
+    // VALIDATE JOB DESCRIPTION
     // ----------------------------------------
-
     if (
       typeof jobDescription !== "string" ||
       !jobDescription.trim()
@@ -202,8 +194,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           success: false,
-          message:
-            "Please provide a job description.",
+          message: "Please provide a job description.",
         },
         { status: 400 }
       );
@@ -221,17 +212,15 @@ export async function POST(request: Request) {
     }
 
     // ----------------------------------------
-    // Validate tone
+    // VALIDATE TONE
     // ----------------------------------------
-
     const selectedTone: Tone = isTone(tone)
       ? tone
       : "professional";
 
     // ----------------------------------------
-    // Extract resume text
+    // EXTRACT RESUME TEXT
     // ----------------------------------------
-
     const buffer = Buffer.from(
       await resume.arrayBuffer()
     );
@@ -253,10 +242,9 @@ export async function POST(request: Request) {
       resume.type ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
-      const result =
-        await mammoth.extractRawText({
-          buffer,
-        });
+      const result = await mammoth.extractRawText({
+        buffer,
+      });
 
       resumeText = result.value;
     } else {
@@ -271,19 +259,14 @@ export async function POST(request: Request) {
     }
 
     // ----------------------------------------
-    // Clean extracted text
+    // CLEAN EXTRACTED TEXT
     // ----------------------------------------
-
     resumeText = resumeText
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n")
       .replace(/[ \t]+/g, " ")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
-
-    // ----------------------------------------
-    // Validate extracted text
-    // ----------------------------------------
 
     if (!resumeText) {
       return Response.json(
@@ -296,35 +279,23 @@ export async function POST(request: Request) {
       );
     }
 
-
-    console.log("========== COVER LETTER RESUME TEXT ==========");
-    console.log(resumeText.slice(0, 5000));
-    console.log("========== RESUME TEXT LENGTH ==========");
-    console.log(resumeText.length);
-
     // ----------------------------------------
-    // Detect security/verification pages
+    // DETECT SECURITY VERIFICATION PAGES
     // ----------------------------------------
-
-    if (
-      looksLikeSecurityVerificationPage(
-        resumeText
-      )
-    ) {
+    if (looksLikeSecurityVerificationPage(resumeText)) {
       return Response.json(
         {
           success: false,
           message:
-            "This PDF appears to contain a website security-verification page instead of your actual resume. Please download the original resume PDF from your resume source and upload that file directly.",
+            "This PDF appears to contain a website security-verification page instead of your actual resume. Please download the original resume PDF from its source and upload that file directly.",
         },
         { status: 400 }
       );
     }
 
     // ----------------------------------------
-    // Validate that document looks like a resume
+    // VALIDATE RESUME CONTENT
     // ----------------------------------------
-
     if (!looksLikeResume(resumeText)) {
       return Response.json(
         {
@@ -337,42 +308,77 @@ export async function POST(request: Request) {
     }
 
     // ----------------------------------------
-    // Generate cover letter
+    // CHECK AI USAGE LIMIT
     // ----------------------------------------
+    const quota = reserveAiUsage(userId, "coverLetter");
 
+    if (!quota.allowed) {
+      return Response.json(
+        {
+          success: false,
+          code: "AI_USAGE_LIMIT_REACHED",
+          message:
+            "You've reached your Cover Letter limit for this period. Please try again after it resets or check your Premium options.",
+          usage: {
+            plan: quota.plan,
+            used: quota.used,
+            limit: quota.limit,
+            remaining: quota.remaining,
+            resetsAt: quota.resetsAt,
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    reservationId = quota.reservationId;
+
+    // ----------------------------------------
+    // GENERATE COVER LETTER
+    // ----------------------------------------
     const result = await generateCoverLetter(
       resumeText,
-      jobDescription,
+      jobDescription.trim(),
       selectedTone
     );
 
     // ----------------------------------------
-    // Return result
+    // COMPLETE USAGE
     // ----------------------------------------
+    // Count the use after successful generation.
+    if (reservationId) {
+      completeAiUsage(reservationId);
+      reservationId = null;
+    }
 
+    // ----------------------------------------
+    // RETURN RESULT
+    // ----------------------------------------
     return Response.json({
       success: true,
-      message:
-        "Cover letter generated successfully.",
+      message: "Cover letter generated successfully.",
       fileName: resume.name,
       tone: selectedTone,
       result,
     });
   } catch (error) {
-    console.error(
-      "Cover letter generation error:",
-      error
-    );
+    if (reservationId) {
+      releaseAiUsage(reservationId);
+      reservationId = null;
+    }
+
+    // Do not log uploaded resume contents or other
+    // personal information.
+    console.error("Cover letter generation failed.");
 
     const message =
       error instanceof Error
         ? error.message
         : "Something went wrong while generating the cover letter.";
 
-    const status =
-      message.includes("AI is not configured")
-        ? 503
-        : 500;
+    const status = message.includes("AI is not configured")
+      ? 503
+      : 500;
 
     return Response.json(
       {

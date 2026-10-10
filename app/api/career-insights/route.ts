@@ -4,6 +4,11 @@ import { getServerSession } from "next-auth";
 import { generateCareerInsights } from "@/lib/ai/career-advisor";
 import { authOptions } from "@/lib/auth-options";
 import db from "@/lib/db";
+import {
+  reserveAiUsage,
+  completeAiUsage,
+  releaseAiUsage,
+} from "@/lib/ai/usage-limits";
 
 const PDF_TYPE = "application/pdf";
 
@@ -76,6 +81,7 @@ function getCachedInsights(
 }
 
 export async function POST(request: Request) {
+   let reservationId: string | null = null;
   try {
     // -----------------------------------------
     // AUTHENTICATION
@@ -267,6 +273,33 @@ export async function POST(request: Request) {
         // and regenerate the insights.
       }
     }
+      
+    
+    // -----------------------------------------
+    // CHECK AI USAGE LIMIT
+    // -----------------------------------------
+    const quota = reserveAiUsage(userId, "careerInsights");
+
+    if (!quota.allowed) {
+      return Response.json(
+        {
+          success: false,
+          code: "AI_USAGE_LIMIT_REACHED",
+          message:
+            "You've reached your Career Insights limit for this period. Please try again after it resets or check your Premium options.",
+          usage: {
+            plan: quota.plan,
+            used: quota.used,
+            limit: quota.limit,
+            remaining: quota.remaining,
+            resetsAt: quota.resetsAt,
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    reservationId = quota.reservationId;
 
     // -----------------------------------------
     // GENERATE NEW CAREER INSIGHTS
@@ -290,6 +323,11 @@ export async function POST(request: Request) {
         const existingInsights = JSON.parse(
           cachedAfterAnalysis.insights_json
         );
+
+         if (reservationId) {
+  releaseAiUsage(reservationId);
+  reservationId = null;
+}
 
         return Response.json({
           success: true,
@@ -333,6 +371,11 @@ export async function POST(request: Request) {
       createdAt
     );
 
+    if (reservationId) {
+  completeAiUsage(reservationId);
+  reservationId = null;
+}
+
     // -----------------------------------------
     // RESPONSE
     // -----------------------------------------
@@ -347,6 +390,10 @@ export async function POST(request: Request) {
       insights,
     });
   } catch (error) {
+    if (reservationId) {
+  releaseAiUsage(reservationId);
+  reservationId = null;
+}
     console.error(
       "Career insights error:",
       error

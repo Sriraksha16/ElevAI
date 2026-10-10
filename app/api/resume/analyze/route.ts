@@ -8,6 +8,11 @@ import { analyzeResume } from "@/lib/ai/resume-analyzer";
 import { calculateResumeScores } from "@/lib/scoring/resume-score";
 import { authOptions } from "@/lib/auth-options";
 import db from "@/lib/db";
+import {
+  reserveAiUsage,
+  completeAiUsage,
+  releaseAiUsage,
+} from "@/lib/ai/usage-limits";
 
 PDFParse.setWorker(getPath());
 
@@ -67,7 +72,7 @@ function returnCachedResume(
   ) {
     return null;
   }
-
+ 
   try {
     const analysis = JSON.parse(resume.analysis_json);
     const scores = JSON.parse(resume.scores_json);
@@ -90,6 +95,8 @@ function returnCachedResume(
 }
 
 export async function POST(request: Request) {
+
+  let reservationId: string | null = null;
   try {
     // -----------------------------------------
     // AUTHENTICATION
@@ -233,9 +240,35 @@ export async function POST(request: Request) {
         )
       : null;
 
-    if (cachedResponse) {
-      return cachedResponse;
-    }
+if (cachedResponse) {
+  return cachedResponse;
+}
+
+// -----------------------------------------
+// CHECK AND RESERVE AI USAGE
+// -----------------------------------------
+const quota = reserveAiUsage(userId, "resumeAnalysis");
+
+if (!quota.allowed) {
+  return Response.json(
+    {
+      success: false,
+      code: "AI_USAGE_LIMIT_REACHED",
+      message:
+        "You've reached your resume analysis limit for this period. Please try again after it resets or check your Premium options.",
+      usage: {
+        plan: quota.plan,
+        used: quota.used,
+        limit: quota.limit,
+        remaining: quota.remaining,
+        resetsAt: quota.resetsAt,
+      },
+    },
+    { status: 429 }
+  );
+}
+
+reservationId = quota.reservationId;
 
     // -----------------------------------------
     // NEW RESUME VERSION
@@ -268,8 +301,14 @@ export async function POST(request: Request) {
       : null;
 
     if (cachedAfterAnalysis) {
-      return cachedAfterAnalysis;
+      if (reservationId) {
+       releaseAiUsage(reservationId);
+       reservationId = null;
+      }
+
+     return cachedAfterAnalysis;
     }
+     
 
     // -----------------------------------------
     // CREATE DATABASE RECORDS
@@ -336,6 +375,11 @@ export async function POST(request: Request) {
 
     saveResume();
 
+         if (reservationId) {
+          completeAiUsage(reservationId);
+           reservationId = null;
+         }
+  
     // -----------------------------------------
     // RESPONSE
     // -----------------------------------------
@@ -351,7 +395,11 @@ export async function POST(request: Request) {
       analysis,
       scores,
     });
-  } catch (error) {
+    } catch (error) {
+    if (reservationId) {
+      releaseAiUsage(reservationId);
+      reservationId = null;
+    }
     console.error("Resume analysis error:", error);
 
     return Response.json(

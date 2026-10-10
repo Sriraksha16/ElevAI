@@ -42,11 +42,22 @@ type JobMatchResult = {
   };
 };
 
+
+type CoverLetterContent = {
+  subject?: string;
+  greeting?: string;
+  opening?: string;
+  body?: string[];
+  closing?: string;
+  fullText?: string;
+};
+
 type CoverLetterResult = {
-  coverLetter?: string;
+  coverLetter?: string | CoverLetterContent;
   subject?: string;
   [key: string]: unknown;
 };
+
 
 type InterviewCoachResult = {
   interviewProfile: {
@@ -400,19 +411,64 @@ export function JobAiActions({
     }
   }
 
-  function getCoverLetterText() {
-    if (!coverLetterResult) {
-      return "";
-    }
-
-    if (typeof coverLetterResult.coverLetter === "string") {
-      return coverLetterResult.coverLetter;
-    }
-
-    return Object.values(coverLetterResult)
-      .filter((value) => typeof value === "string")
-      .join("\n\n");
+  
+function getCoverLetterText(): string {
+  if (!coverLetterResult) {
+    return "";
   }
+
+  const letter = coverLetterResult.coverLetter;
+
+  // Support the original string response format.
+  if (typeof letter === "string") {
+    return letter;
+  }
+
+  // Support the structured response from cover-letter-generator.ts.
+  if (letter && typeof letter === "object") {
+    if (
+      typeof letter.fullText === "string" &&
+      letter.fullText.trim()
+    ) {
+      return letter.fullText;
+    }
+
+    const parts: string[] = [];
+
+    if (typeof letter.greeting === "string") {
+      parts.push(letter.greeting);
+    }
+
+    if (typeof letter.opening === "string") {
+      parts.push(letter.opening);
+    }
+
+    if (Array.isArray(letter.body)) {
+      for (const paragraph of letter.body) {
+        if (typeof paragraph === "string") {
+          parts.push(paragraph);
+        }
+      }
+    }
+
+    if (typeof letter.closing === "string") {
+      parts.push(letter.closing);
+    }
+
+    if (parts.length > 0) {
+      return parts.join("\n\n");
+    }
+  }
+
+  // Backward-compatible fallback for older response formats.
+  const subject = coverLetterResult.subject;
+
+  if (typeof subject === "string") {
+    return subject;
+  }
+
+  return "";
+}
 
   async function copyCoverLetter() {
     const text = getCoverLetterText();

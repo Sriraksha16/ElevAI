@@ -1,22 +1,55 @@
+
 import { getPath } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 import mammoth from "mammoth";
 
 import {
   generateInterviewPreparation,
 } from "@/lib/ai/interview-coach";
 
+import {
+  reserveAiUsage,
+  completeAiUsage,
+  releaseAiUsage,
+} from "@/lib/ai/usage-limits";
+
 PDFParse.setWorker(getPath());
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  let reservationId: string | null = null;
+
   try {
+    // -----------------------------------------
+    // AUTHENTICATION
+    // -----------------------------------------
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return Response.json(
+        {
+          success: false,
+          message: "Please sign in to use this AI feature.",
+        },
+        { status: 401 }
+      );
+    }
+
+    // -----------------------------------------
+    // READ FORM DATA
+    // -----------------------------------------
     const formData = await request.formData();
 
     const resume = formData.get("resume");
     const jobDescription = formData.get("jobDescription");
 
+    // -----------------------------------------
+    // VALIDATE RESUME
+    // -----------------------------------------
     if (!(resume instanceof File)) {
       return Response.json(
         {
@@ -47,6 +80,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // -----------------------------------------
+    // VALIDATE JOB DESCRIPTION
+    // -----------------------------------------
     if (
       typeof jobDescription !== "string" ||
       !jobDescription.trim()
@@ -71,6 +107,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // -----------------------------------------
+    // EXTRACT RESUME TEXT
+    // -----------------------------------------
     const buffer = Buffer.from(
       await resume.arrayBuffer()
     );
@@ -92,10 +131,9 @@ export async function POST(request: Request) {
       resume.type ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
-      const result =
-        await mammoth.extractRawText({
-          buffer,
-        });
+      const result = await mammoth.extractRawText({
+        buffer,
+      });
 
       resumeText = result.value;
     } else {
@@ -109,7 +147,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!resumeText.trim()) {
+    // -----------------------------------------
+    // VALIDATE EXTRACTED TEXT
+    // -----------------------------------------
+    const normalizedResumeText = resumeText.trim();
+
+    if (!normalizedResumeText) {
       return Response.json(
         {
           success: false,
@@ -120,12 +163,54 @@ export async function POST(request: Request) {
       );
     }
 
-    const result =
-      await generateInterviewPreparation(
-        resumeText,
-        jobDescription
-      );
+    // -----------------------------------------
+    // CHECK AI USAGE LIMIT
+    // -----------------------------------------
+    const quota = reserveAiUsage(
+      userId,
+      "interviewPreparation"
+    );
 
+    if (!quota.allowed) {
+      return Response.json(
+        {
+          success: false,
+          code: "AI_USAGE_LIMIT_REACHED",
+          message:
+            "You've reached your Interview Coach limit for this period. Please try again after it resets or check your Premium options.",
+          usage: {
+            plan: quota.plan,
+            used: quota.used,
+            limit: quota.limit,
+            remaining: quota.remaining,
+            resetsAt: quota.resetsAt,
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    reservationId = quota.reservationId;
+
+    // -----------------------------------------
+    // GENERATE INTERVIEW PREPARATION
+    // -----------------------------------------
+    const result = await generateInterviewPreparation(
+      normalizedResumeText,
+      jobDescription.trim()
+    );
+
+    // -----------------------------------------
+    // COMPLETE USAGE
+    // -----------------------------------------
+    if (reservationId) {
+      completeAiUsage(reservationId);
+      reservationId = null;
+    }
+
+    // -----------------------------------------
+    // RETURN RESULT
+    // -----------------------------------------
     return Response.json({
       success: true,
       message:
@@ -134,20 +219,23 @@ export async function POST(request: Request) {
       result,
     });
   } catch (error) {
-    console.error(
-      "Interview coach error:",
-      error
-    );
+    // Release usage if generation fails before completion.
+    if (reservationId) {
+      releaseAiUsage(reservationId);
+      reservationId = null;
+    }
+
+    // Avoid logging resume text or other personal data.
+    console.error("Interview coach generation failed.");
 
     const message =
       error instanceof Error
         ? error.message
         : "Something went wrong while preparing the interview.";
 
-    const status =
-      message.includes("AI is not configured")
-        ? 503
-        : 500;
+    const status = message.includes("AI is not configured")
+      ? 503
+      : 500;
 
     return Response.json(
       {

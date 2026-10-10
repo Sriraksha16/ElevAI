@@ -1,16 +1,44 @@
+
 import { matchResumeToJob } from "@/lib/ai/job-matcher";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
+import {
+  reserveAiUsage,
+  completeAiUsage,
+  releaseAiUsage,
+} from "@/lib/ai/usage-limits";
 
 export async function POST(request: Request) {
+  let reservationId: string | null = null;
+
   try {
+    // -----------------------------------------
+    // AUTHENTICATION
+    // -----------------------------------------
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return Response.json(
+        {
+          success: false,
+          message: "Please sign in to use this AI feature.",
+        },
+        { status: 401 }
+      );
+    }
+
+    // -----------------------------------------
+    // FILE UPLOAD
+    // -----------------------------------------
     const formData = await request.formData();
 
     const resume = formData.get("resume");
     const jobDescription = formData.get("jobDescription");
 
     // -----------------------------------------
-    // Validate resume
+    // VALIDATE RESUME
     // -----------------------------------------
-
     if (!(resume instanceof File)) {
       return Response.json(
         {
@@ -22,9 +50,8 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------
-    // Validate job description
+    // VALIDATE JOB DESCRIPTION
     // -----------------------------------------
-
     if (typeof jobDescription !== "string") {
       return Response.json(
         {
@@ -46,9 +73,8 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------
-    // Validate file size
+    // VALIDATE FILE SIZE
     // -----------------------------------------
-
     if (resume.size === 0) {
       return Response.json(
         {
@@ -70,9 +96,8 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------
-    // Read file
+    // READ FILE
     // -----------------------------------------
-
     const buffer = Buffer.from(
       await resume.arrayBuffer()
     );
@@ -80,9 +105,8 @@ export async function POST(request: Request) {
     let resumeText = "";
 
     // -----------------------------------------
-    // PDF
+    // EXTRACT PDF TEXT
     // -----------------------------------------
-
     if (resume.type === "application/pdf") {
       const { PDFParse } = await import("pdf-parse");
       const { getPath } = await import("pdf-parse/worker");
@@ -93,17 +117,17 @@ export async function POST(request: Request) {
         data: buffer,
       });
 
-      const result = await parser.getText();
-
-      resumeText = result.text;
-
-      await parser.destroy();
+      try {
+        const result = await parser.getText();
+        resumeText = result.text;
+      } finally {
+        await parser.destroy();
+      }
     }
 
     // -----------------------------------------
-    // DOCX
+    // EXTRACT DOCX TEXT
     // -----------------------------------------
-
     else if (
       resume.type ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -119,9 +143,8 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------
-    // Unsupported file
+    // UNSUPPORTED FILE
     // -----------------------------------------
-
     else {
       return Response.json(
         {
@@ -134,10 +157,11 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------
-    // Validate extracted text
+    // VALIDATE EXTRACTED TEXT
     // -----------------------------------------
+    const normalizedResumeText = resumeText.trim();
 
-    if (!resumeText.trim()) {
+    if (!normalizedResumeText) {
       return Response.json(
         {
           success: false,
@@ -149,18 +173,51 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------
+    // CHECK AI USAGE LIMIT
+    // -----------------------------------------
+    const quota = reserveAiUsage(userId, "jobMatch");
+
+    if (!quota.allowed) {
+      return Response.json(
+        {
+          success: false,
+          code: "AI_USAGE_LIMIT_REACHED",
+          message:
+            "You've reached your Job Match limit for this period. Please try again after it resets or check your Premium options.",
+          usage: {
+            plan: quota.plan,
+            used: quota.used,
+            limit: quota.limit,
+            remaining: quota.remaining,
+            resetsAt: quota.resetsAt,
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    reservationId = quota.reservationId;
+
+    // -----------------------------------------
     // AI JOB MATCHING
     // -----------------------------------------
-
     const match = await matchResumeToJob(
-      resumeText,
-      jobDescription
+      normalizedResumeText,
+      jobDescription.trim()
     );
+
+    // -----------------------------------------
+    // COMPLETE USAGE
+    // -----------------------------------------
+    // Count the use only after the AI call succeeds.
+    if (reservationId) {
+      completeAiUsage(reservationId);
+      reservationId = null;
+    }
 
     // -----------------------------------------
     // RESPONSE
     // -----------------------------------------
-
     return Response.json({
       success: true,
       message:
@@ -169,6 +226,13 @@ export async function POST(request: Request) {
       match,
     });
   } catch (error) {
+    // Release the reservation if the request fails
+    // before usage has been completed.
+    if (reservationId) {
+      releaseAiUsage(reservationId);
+      reservationId = null;
+    }
+
     console.error(
       "Job match analysis error:",
       error

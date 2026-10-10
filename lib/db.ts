@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { id } from "zod/v4/locales";
 
 const dataDirectory = path.join(process.cwd(), "data");
 
@@ -208,4 +209,45 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_career_insights_user_id
   ON career_insights(user_id);
 `);
+
+
+//
+// AI USAGE TRACKING
+// Records AI generation reservations and completed generations.
+// Reservations prevent concurrent requests from exceeding limits.
+//
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ai_usage (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    feature TEXT NOT NULL,
+    period_key TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'reserved'
+      CHECK (status IN ('reserved', 'completed')),
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ai_usage_user_feature_period
+  ON ai_usage(user_id, feature, period_key, status);
+`);
+
+//
+// USER ENTITLEMENTS
+// Premium access will be activated only by verified server-side payment.
+//
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_entitlements (
+    user_id TEXT PRIMARY KEY,
+    plan TEXT NOT NULL DEFAULT 'free'
+      CHECK (plan IN ('free', 'premium')),
+    premium_started_at TEXT,
+    premium_expires_at TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
+
 export default db;
