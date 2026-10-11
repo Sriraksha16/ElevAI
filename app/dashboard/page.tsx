@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-
+import PremiumCheckout from "@/components/dashboard/PremiumCheckout";
 import { AuthStatusToast } from "@/components/AuthStatusToast";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";

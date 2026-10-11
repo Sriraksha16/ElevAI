@@ -250,4 +250,30 @@ db.exec(`
 `);
 
 
+
+
+//
+// RAZORPAY PAYMENT ORDERS
+// Records orders and prevents duplicate Premium activation.
+//
+db.exec(`
+  CREATE TABLE IF NOT EXISTS payment_orders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    order_id TEXT NOT NULL UNIQUE,
+    payment_id TEXT UNIQUE,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'created'
+      CHECK (status IN ('created', 'paid')),
+    created_at TEXT NOT NULL,
+    paid_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_payment_orders_user_id
+  ON payment_orders(user_id);
+`);
+
+
 export default db;

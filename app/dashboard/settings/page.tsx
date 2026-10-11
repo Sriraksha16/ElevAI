@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { PageBackLink } from "@/components/dashboard/PageBackLink";
+import PremiumCheckout from "@/components/dashboard/PremiumCheckout";
 
 type Settings = {
   preferredTone: "professional" | "confident" | "friendly";
@@ -468,6 +469,9 @@ export default function SettingsPage() {
               </div>
             )}
           </section>
+
+          {/* PREMIUM MEMBERSHIP */}
+          <PremiumCheckout />
 
           {/* RESUME PREFERENCES */}
           <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
