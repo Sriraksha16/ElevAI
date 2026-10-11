@@ -31,6 +31,7 @@ db.exec(`
   )
 `);
 
+
 function addColumnIfMissing(
   table: string,
   column: string,
@@ -40,9 +41,7 @@ function addColumnIfMissing(
     .prepare(`PRAGMA table_info(${table})`)
     .all() as { name: string }[];
 
-  const exists = columns.some(
-    (item) => item.name === column
-  );
+  const exists = columns.some((item) => item.name === column);
 
   if (!exists) {
     db.exec(
@@ -50,6 +49,7 @@ function addColumnIfMissing(
     );
   }
 }
+
 
 //
 // EXISTING USER COLUMNS
