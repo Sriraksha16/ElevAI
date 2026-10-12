@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 
 import {
@@ -38,9 +39,42 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "ElevAI — Elevate Your Career with AI",
+  metadataBase: new URL(
+    "https://elevai-production-fc8e.up.railway.app"
+  ),
+
+  title: "ElevAI — AI Resume Analyzer & Career Assistant",
+
   description:
-    "AI-powered tools to optimize your resume, prepare for interviews, and accelerate your career.",
+    "Analyze your resume, match job descriptions, create tailored cover letters, and practice interviews with ElevAI, your AI-powered career assistant.",
+
+  applicationName: "ElevAI",
+
+  alternates: {
+    canonical: "/",
+  },
+
+  openGraph: {
+    title: "ElevAI — Elevate Your Career with AI",
+    description:
+      "Improve your resume, prepare for interviews, and explore AI-powered career tools with ElevAI.",
+    url: "https://elevai-production-fc8e.up.railway.app/",
+    siteName: "ElevAI",
+    locale: "en_US",
+    type: "website",
+  },
+
+  twitter: {
+    card: "summary",
+    title: "ElevAI — Elevate Your Career with AI",
+    description:
+      "AI-powered resume analysis, job matching, cover letters, and interview preparation.",
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
@@ -54,9 +88,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} ${sora.variable} ${spaceGrotesk.variable} antialiased`}
     >
       <body>
-        <SessionProvider>
-          {children}
-        </SessionProvider>
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );
